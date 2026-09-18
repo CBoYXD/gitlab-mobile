@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:pivotX="54"
+        android:pivotY="54"
+        android:scaleX="0.9"
+        android:scaleY="0.9">
+        <!-- Center bottom tip / snout (Dark Red/Orange #E24329) -->
+        <path
+            android:fillColor="#E24329"
+            android:pathData="M54,80 L42.3,44.1 L65.7,44.1 Z" />
+        <!-- Left flank / cheek (Vibrant Orange #FC6D26) -->
+        <path
+            android:fillColor="#FC6D26"
+            android:pathData="M54,80 L42.3,44.1 L23.5,44.1 L54,80 Z" />
+        <!-- Right flank / cheek (Vibrant Orange #FC6D26) -->
+        <path
+            android:fillColor="#FC6D26"
+            android:pathData="M54,80 L65.7,44.1 L84.5,44.1 L54,80 Z" />
+        <!-- Left ear (Gold/Amber #FCA326) -->
+        <path
+            android:fillColor="#FCA326"
+            android:pathData="M23.5,44.1 L33.2,28.2 L42.3,44.1 Z" />
+        <!-- Right ear (Gold/Amber #FCA326) -->
+        <path
+            android:fillColor="#FCA326"
+            android:pathData="M84.5,44.1 L74.8,28.2 L65.7,44.1 Z" />
+        <!-- Left lower corner accent -->
+        <path
+            android:fillColor="#E24329"
+            android:pathData="M23.5,44.1 L18,60 L54,80 Z" />
+        <!-- Right lower corner accent -->
+        <path
+            android:fillColor="#E24329"
+            android:pathData="M84.5,44.1 L90,60 L54,80 Z" />
+    </group>
+</vector>

@@ -86,6 +86,8 @@ data class GitLabMergeRequest(
   val state: String = "opened", // opened, merged, closed
   @Json(name = "source_branch") val sourceBranch: String = "",
   @Json(name = "target_branch") val targetBranch: String = "main",
+  @Json(name = "created_at") val createdAt: String = "",
+  @Json(name = "updated_at") val updatedAt: String = "",
   val author: GitLabUser = GitLabUser(),
   val assignees: List<GitLabUser> = emptyList(),
   val labels: List<String> = emptyList(),

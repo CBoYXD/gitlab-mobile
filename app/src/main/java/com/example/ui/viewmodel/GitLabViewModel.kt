@@ -21,6 +21,11 @@ import kotlinx.coroutines.launch
 
 sealed class ScreenDestination {
   object MainTabs : ScreenDestination()
+  object UserProfile : ScreenDestination()
+  object Instances : ScreenDestination()
+  object IssuesList : ScreenDestination()
+  object MergeRequestsList : ScreenDestination()
+  object PipelinesList : ScreenDestination()
   data class ProjectDetail(val projectId: Long) : ScreenDestination()
   data class FileViewer(val projectId: Long, val filePath: String) : ScreenDestination()
   data class IssueDetail(val issue: GitLabIssue) : ScreenDestination()
@@ -29,11 +34,38 @@ sealed class ScreenDestination {
 
 enum class BottomTab(val title: String) {
   HOME("Home"),
-  PROJECTS("Projects"),
-  WORK_ITEMS("Issues & MRs"),
-  PIPELINES("CI / CD"),
-  INSTANCES("Instances")
+  INBOX("Inbox"),
+  PROJECTS("Projects")
 }
+
+enum class NotificationType {
+  ISSUE,
+  MERGE_REQUEST,
+  PIPELINE,
+  MENTION,
+  DISCUSSION
+}
+
+enum class InboxFilter {
+  ALL,
+  UNREAD,
+  ASSIGNED,
+  MENTIONED
+}
+
+data class GitLabNotification(
+  val id: String,
+  val type: NotificationType,
+  val title: String,
+  val projectPath: String,
+  val authorName: String,
+  val authorUsername: String,
+  val timestamp: String,
+  val isUnread: Boolean,
+  val targetId: Long? = null,
+  val subtitle: String = "",
+  val statusBadge: String? = null
+)
 
 data class ConnectionTestState(
   val isTesting: Boolean = false,
@@ -65,7 +97,9 @@ data class GitLabUiState(
   val selectedIssue: GitLabIssue? = null,
   val selectedMr: GitLabMergeRequest? = null,
   val connectionTestState: ConnectionTestState = ConnectionTestState(),
-  val bannerMessage: String? = null
+  val bannerMessage: String? = null,
+  val notifications: List<GitLabNotification> = emptyList(),
+  val inboxFilter: InboxFilter = InboxFilter.ALL
 )
 
 class GitLabViewModel(application: Application) : AndroidViewModel(application) {
@@ -73,16 +107,111 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   private val instanceStore = InstanceStore(application)
   private val repository = GitLabRepository()
 
+  private val initialNotifications = listOf(
+    GitLabNotification(
+      id = "notif-1",
+      type = NotificationType.MERGE_REQUEST,
+      title = "!42: Optimize high-throughput event processing pipeline",
+      projectPath = "GrowCrypt/copytrade",
+      authorName = "Bohdan",
+      authorUsername = "CBoYXD",
+      timestamp = "10m ago",
+      isUnread = true,
+      subtitle = "Requested your review on 3 changed files (+142, -18)",
+      statusBadge = "Review requested"
+    ),
+    GitLabNotification(
+      id = "notif-2",
+      type = NotificationType.MENTION,
+      title = "Mentioned you in #84: SQLite lock contention during burst trade events",
+      projectPath = "GrowCrypt/copytrade",
+      authorName = "Elena Rostova",
+      authorUsername = "elena_dev",
+      timestamp = "1h ago",
+      isUnread = true,
+      subtitle = "\"@CBoYXD can you check if the WAL pragma fixes this?\"",
+      statusBadge = "Mentioned"
+    ),
+    GitLabNotification(
+      id = "notif-3",
+      type = NotificationType.PIPELINE,
+      title = "Pipeline #3082 passed on branch main",
+      projectPath = "gitlab-org/gitlab-runner",
+      authorName = "GitLab CI",
+      authorUsername = "gitlab-bot",
+      timestamp = "3h ago",
+      isUnread = false,
+      subtitle = "All 4 stages passed (build, test, security, deploy) in 4m 12s",
+      statusBadge = "Passed"
+    ),
+    GitLabNotification(
+      id = "notif-4",
+      type = NotificationType.ISSUE,
+      title = "#102: Support GitLab Duo Code Suggestions in Jetpack Compose",
+      projectPath = "mobile/gitlab-android",
+      authorName = "Alex Chen",
+      authorUsername = "alex_c",
+      timestamp = "Yesterday",
+      isUnread = true,
+      subtitle = "Assigned to you by alex_c",
+      statusBadge = "Assigned"
+    ),
+    GitLabNotification(
+      id = "notif-5",
+      type = NotificationType.DISCUSSION,
+      title = "New comment on !38: Add support for custom self-hosted OAuth tokens",
+      projectPath = "gitlab-org/gitlab",
+      authorName = "Marcus Vance",
+      authorUsername = "mvance",
+      timestamp = "2d ago",
+      isUnread = false,
+      subtitle = "\"Nice catch on the bearer authorization header fallback.\"",
+      statusBadge = "Comment"
+    ),
+    GitLabNotification(
+      id = "notif-6",
+      type = NotificationType.MERGE_REQUEST,
+      title = "Merged !35: Dark mode palette alignment with GitHub Mobile UI",
+      projectPath = "design-system/tanuki-tokens",
+      authorName = "Sarah Jenkins",
+      authorUsername = "sjenkins",
+      timestamp = "3d ago",
+      isUnread = false,
+      subtitle = "Merged into main by Sarah Jenkins",
+      statusBadge = "Merged"
+    )
+  )
+
   private val _uiState = MutableStateFlow(
     GitLabUiState(
       activeInstance = instanceStore.getActiveInstance(),
-      savedInstances = instanceStore.getInstances()
+      savedInstances = instanceStore.getInstances(),
+      notifications = initialNotifications
     )
   )
   val uiState: StateFlow<GitLabUiState> = _uiState.asStateFlow()
 
   init {
     loadAllData()
+  }
+
+  fun setInboxFilter(filter: InboxFilter) {
+    _uiState.update { it.copy(inboxFilter = filter) }
+  }
+
+  fun toggleNotificationRead(id: String) {
+    _uiState.update { state ->
+      val updated = state.notifications.map {
+        if (it.id == id) it.copy(isUnread = !it.isUnread) else it
+      }
+      state.copy(notifications = updated)
+    }
+  }
+
+  fun markAllNotificationsAsRead() {
+    _uiState.update { state ->
+      state.copy(notifications = state.notifications.map { it.copy(isUnread = false) })
+    }
   }
 
   fun switchTab(tab: BottomTab) {
@@ -96,7 +225,12 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
       is ScreenDestination.FileViewer -> loadFileContent(destination.projectId, destination.filePath)
       is ScreenDestination.MergeRequestDetail -> loadMergeRequestDetails(destination.mr)
       is ScreenDestination.IssueDetail -> _uiState.update { it.copy(selectedIssue = destination.issue) }
-      ScreenDestination.MainTabs -> {}
+      ScreenDestination.MainTabs,
+      ScreenDestination.UserProfile,
+      ScreenDestination.Instances,
+      ScreenDestination.IssuesList,
+      ScreenDestination.MergeRequestsList,
+      ScreenDestination.PipelinesList -> {}
     }
   }
 
@@ -109,12 +243,20 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
       }
       is ScreenDestination.IssueDetail -> {
         val projId = currentDest.issue.projectId
-        _uiState.update { it.copy(destination = if (projId > 0) ScreenDestination.ProjectDetail(projId) else ScreenDestination.MainTabs) }
+        _uiState.update { it.copy(destination = if (projId > 0) ScreenDestination.ProjectDetail(projId) else ScreenDestination.IssuesList) }
         true
       }
       is ScreenDestination.MergeRequestDetail -> {
         val projId = currentDest.mr.projectId
-        _uiState.update { it.copy(destination = if (projId > 0) ScreenDestination.ProjectDetail(projId) else ScreenDestination.MainTabs) }
+        _uiState.update { it.copy(destination = if (projId > 0) ScreenDestination.ProjectDetail(projId) else ScreenDestination.MergeRequestsList) }
+        true
+      }
+      is ScreenDestination.UserProfile,
+      is ScreenDestination.Instances,
+      is ScreenDestination.IssuesList,
+      is ScreenDestination.MergeRequestsList,
+      is ScreenDestination.PipelinesList -> {
+        _uiState.update { it.copy(destination = ScreenDestination.MainTabs) }
         true
       }
       is ScreenDestination.ProjectDetail -> {

@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowForward
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -62,7 +63,8 @@ import com.example.ui.theme.GitLabSuccess
 fun PipelinesScreen(
   pipelines: List<GitLabPipeline>,
   onRefresh: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  onBack: (() -> Unit)? = null
 ) {
   var filterStatus by remember { mutableStateOf("All") }
 
@@ -88,17 +90,31 @@ fun PipelinesScreen(
       horizontalArrangement = Arrangement.SpaceBetween,
       verticalAlignment = Alignment.CenterVertically
     ) {
-      Column {
-        Text(
-          text = "CI / CD Pipelines",
-          style = MaterialTheme.typography.headlineSmall,
-          fontWeight = FontWeight.Bold
-        )
-        Text(
-          text = "GitLab Auto DevOps & Runner execution",
-          fontSize = 12.sp,
-          color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        if (onBack != null) {
+          IconButton(
+            onClick = onBack,
+            modifier = Modifier.padding(end = 4.dp).testTag("pipelines_back_button")
+          ) {
+            Icon(
+              imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+              contentDescription = "Back",
+              tint = MaterialTheme.colorScheme.onBackground
+            )
+          }
+        }
+        Column {
+          Text(
+            text = "CI / CD Pipelines",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.Bold
+          )
+          Text(
+            text = "GitLab Auto DevOps & Runner execution",
+            fontSize = 12.sp,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+          )
+        }
       }
 
       IconButton(onClick = onRefresh) {

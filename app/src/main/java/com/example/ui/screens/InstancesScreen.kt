@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
@@ -84,7 +85,8 @@ fun InstancesScreen(
   onDeleteInstance: (String) -> Unit,
   onTestConnection: (url: String, token: String) -> Unit,
   onClearTestState: () -> Unit,
-  modifier: Modifier = Modifier
+  modifier: Modifier = Modifier,
+  onBack: (() -> Unit)? = null
 ) {
   var showAddDialog by remember { mutableStateOf(false) }
 
@@ -116,9 +118,19 @@ fun InstancesScreen(
           modifier = Modifier
             .fillMaxWidth()
             .padding(vertical = 12.dp),
-          horizontalArrangement = Arrangement.SpaceBetween,
           verticalAlignment = Alignment.CenterVertically
         ) {
+          if (onBack != null) {
+            IconButton(
+              onClick = onBack,
+              modifier = Modifier.padding(end = 8.dp)
+            ) {
+              Icon(
+                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
+                contentDescription = "Back"
+              )
+            }
+          }
           Column {
             Text(
               text = "GitLab Instances",

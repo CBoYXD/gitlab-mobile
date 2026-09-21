@@ -15,4 +15,6 @@
 .cxx
 local.properties
 .env
-debug.keystore
+*.jks
+*.keystore
+gradle/gradle-daemon-jvm.properties

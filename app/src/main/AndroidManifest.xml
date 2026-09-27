@@ -32,7 +32,7 @@
 
                 <data
                     android:host="oauth"
-                    android:scheme="com.aistudio.gitlab.mclient" />
+                    android:scheme="com.cboyxd.gitlab" />
             </intent-filter>
         </activity>
     </application>

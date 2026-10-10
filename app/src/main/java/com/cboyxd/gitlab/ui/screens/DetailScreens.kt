@@ -114,6 +114,7 @@ import com.cboyxd.gitlab.data.model.GitLabCommit
 import com.cboyxd.gitlab.data.model.GitLabIssue
 import com.cboyxd.gitlab.data.model.GitLabLabel
 import com.cboyxd.gitlab.data.model.GitLabMergeRequest
+import com.cboyxd.gitlab.ui.components.DiscussionDiffPreview
 import com.cboyxd.gitlab.data.model.GitLabNote
 import com.cboyxd.gitlab.data.model.GitLabPipeline
 import com.cboyxd.gitlab.data.model.GitLabUser
@@ -538,6 +539,9 @@ private fun MergeRequestOverview(
   val mr = state.mergeRequest.data
   val clipboard = LocalClipboardManager.current
   val listState = rememberLazyListState()
+  val scope = rememberCoroutineScope()
+  var showAllActivity by rememberSaveable(state.projectId, state.iid) { mutableStateOf(false) }
+  val commentCount = state.discussions.data.sumOf { d -> d.notes.count { !it.system } }
   val scrolledPastTitle by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
   Column(modifier = modifier.fillMaxSize().background(c.bg)) {
@@ -604,6 +608,11 @@ private fun MergeRequestOverview(
               }
             }
 
+            item(key = "comments-link") {
+              GlButton("$commentCount comments", onClick = {
+                scope.launch { listState.animateScrollToItem(if (state.mergeRequest.error != null) 8 else 7) }
+              }, kind = GlButtonKind.Ghost, icon = Icons.Outlined.ChatBubbleOutline, modifier = Modifier.fillMaxWidth())
+            }
             item(key = "changes-header") { DetailSectionHeader("Changes") }
             item(key = "changes") { ChangesRows(state, onOpenPage) }
 
@@ -620,16 +629,32 @@ private fun MergeRequestOverview(
               )
             }
 
-            item(key = "timeline-header") { DetailSectionHeader("Conversation") }
-            timeline(
-              notes = state.notes,
-              labels = labels,
-              opener = mr.author,
-              context = context,
-              onOpenUser = onOpenUser,
-              onRetry = onRetry,
-              guest = !canWrite,
-            )
+            item(key = "timeline-header") {
+              DetailSectionHeader("Conversation · $commentCount")
+              Row(Modifier.fillMaxWidth().padding(horizontal = GlSpace.margin), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                GlButton("Comments", { showAllActivity = false }, kind = if (!showAllActivity) GlButtonKind.Secondary else GlButtonKind.Ghost)
+                GlButton("All activity", { showAllActivity = true }, kind = if (showAllActivity) GlButtonKind.Secondary else GlButtonKind.Ghost)
+              }
+            }
+            val threads = state.discussions.data.filter { d -> showAllActivity || d.notes.any { !it.system } }
+            if (threads.isEmpty() || state.discussions.error != null) {
+              timeline(notes = state.notes.copy(data = if (showAllActivity) state.notes.data else state.notes.data.filterNot { it.system }), labels = labels, opener = mr.author, context = context, onOpenUser = onOpenUser, onRetry = onRetry, guest = !canWrite)
+            } else {
+              item(key = "rail-top") { RailGap() }
+              items(threads, key = { "discussion-${it.id}" }) { discussion ->
+                val visibleNotes = discussion.notes.filter { showAllActivity || !it.system }
+                val positioned = discussion.notes.firstOrNull { it.position != null }
+                if (positioned != null) {
+                  DiscussionDiffPreview(positioned.position!!, state.discussionDiffs[discussion.id], earlierVersion = mr.sha != null && positioned.position.headSha != mr.sha, onOpen = { onOpenInBrowser("${mr.webUrl}#note_${positioned.id}") })
+                }
+                Column(Modifier.fillMaxWidth().then(if (visibleNotes.size > 1) Modifier.padding(start = 12.dp).border(width = 1.dp, color = c.border) else Modifier)) {
+                  visibleNotes.forEachIndexed { index, note ->
+                    if (note.system) SystemEvent(note, labels) else CommentPost(note, isOpener = note.author.id != 0L && note.author.id == mr.author.id, context = context, onOpenUser = onOpenUser, isReply = index > 0)
+                  }
+                }
+                RailGap()
+              }
+            }
           }
         }
         GlDivider()
@@ -1453,17 +1478,16 @@ private fun RailGap() {
 }
 
 @Composable
-private fun CommentPost(note: GitLabNote, isOpener: Boolean, context: MarkdownContext, onOpenUser: (GitLabUser) -> Unit) {
+private fun CommentPost(note: GitLabNote, isOpener: Boolean, context: MarkdownContext, onOpenUser: (GitLabUser) -> Unit, isReply: Boolean = false) {
   val c = Gl.colors
   Column(Modifier.fillMaxWidth().background(c.bg)) {
     GlDivider()
     Row(verticalAlignment = Alignment.CenterVertically) {
       Box(Modifier.weight(1f)) {
-        AuthorLine(note.author, note.createdAt, badge = if (isOpener) "Author" else null, onOpenUser = onOpenUser, avatar = 36.dp)
+        AuthorLine(note.author, note.createdAt, badge = if (isOpener) "Author" else if (isReply) "Reply" else null, onOpenUser = onOpenUser, avatar = 36.dp)
       }
       Row(Modifier.padding(end = GlSpace.margin), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         if (note.internal == true) GlBadge("Internal", tone = Tone.Warning, icon = Icons.Outlined.Lock)
-        if (note.type == "DiffNote") GlBadge("On the diff")
         if (note.resolved == true) GlBadge("Resolved", tone = Tone.Success)
       }
     }

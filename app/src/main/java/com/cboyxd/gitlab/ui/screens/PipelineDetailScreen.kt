@@ -10,6 +10,9 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -56,12 +59,11 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.AnnotatedString
-import androidx.compose.ui.text.SpanStyle
-import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import com.cboyxd.gitlab.data.api.formatGitLabTime
 import com.cboyxd.gitlab.data.model.GitLabJob
@@ -84,7 +86,6 @@ import com.cboyxd.gitlab.ui.components.formatDuration
 import com.cboyxd.gitlab.ui.components.pipelineStatusStyle
 import com.cboyxd.gitlab.ui.components.pressable
 import com.cboyxd.gitlab.ui.theme.Gl
-import com.cboyxd.gitlab.ui.theme.GlColors
 import com.cboyxd.gitlab.ui.theme.GlSpace
 import com.cboyxd.gitlab.ui.viewmodel.JobDetailState
 import com.cboyxd.gitlab.ui.viewmodel.PipelineDetailState
@@ -458,17 +459,24 @@ private fun JobLog(state: JobDetailState, onRetryLoad: () -> Unit, modifier: Mod
       Text("This job hasn't written any output yet.", style = Gl.type.bodySmall, color = c.textSecondary)
     }
     else -> {
-      val lines by produceState<List<AnnotatedString>?>(null, trace.text, c) {
-        value = withContext(Dispatchers.Default) { parseTrace(trace.text, c) }
+      val lines by produceState<List<JobTraceLine>?>(null, state.jobId, trace.text) {
+        value = withContext(Dispatchers.Default) { parseJobTrace(trace.text) }
       }
       val parsed = lines
       if (parsed == null) {
         Box(modifier.fillMaxWidth()) { LoadingState(label = "Preparing log") }
         return
       }
+      var overrides by remember(state.jobId) { mutableStateOf<Map<String, Boolean>>(emptyMap()) }
+      val collapsed = remember(parsed, overrides) {
+        parsed.filter { it.sectionKey != null && (overrides[it.sectionKey] ?: it.initiallyCollapsed) }.mapNotNull { it.sectionKey }.toSet()
+      }
+      val visible = remember(parsed, collapsed) { parsed.filter { line -> line.parents.none { it in collapsed } } }
+      var timestamps by rememberSaveable(state.jobId) { mutableStateOf(false) }
+      var wrap by rememberSaveable(state.jobId) { mutableStateOf(true) }
       val listState = rememberLazyListState()
       val scope = rememberCoroutineScope()
-      val total = parsed.size + if (trace.truncated) 1 else 0
+      val total = visible.size + if (trace.truncated) 1 else 0
       var scrolledInitially by remember(state.jobId) { mutableStateOf(false) }
       LaunchedEffect(state.jobId, total) {
         if (!scrolledInitially && total > 0) {
@@ -476,52 +484,81 @@ private fun JobLog(state: JobDetailState, onRetryLoad: () -> Unit, modifier: Mod
           scrolledInitially = true
         }
       }
-      val longest = remember(parsed) { (parsed.maxOfOrNull { it.length } ?: 0).coerceAtMost(600) }
+      val style = Gl.type.monoSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 18.sp)
       val measurer = rememberTextMeasurer()
-      val style = Gl.type.monoSmall
       val charWidth = remember(style) { measurer.measure("0", style).size.width.toFloat() }
-      val density = LocalDensity.current
-      val contentWidth = with(density) { (charWidth * (longest + 2)).toDp() } + GlSpace.margin * 2
-      val horizontal = rememberScrollState()
-      Box(modifier = modifier.fillMaxWidth().background(c.codeBg)) {
-        Box(modifier = Modifier.fillMaxSize().horizontalScroll(horizontal)) {
-          LazyColumn(
-            state = listState,
-            modifier = Modifier.width(contentWidth.coerceAtLeast(360.dp)).fillMaxHeight(),
-            contentPadding = PaddingValues(vertical = 12.dp),
-          ) {
-            if (trace.truncated) {
-              item(key = "truncated") {
-                Text(
-                  "Showing the last 256 KB. Open the job in the browser for the full log.",
-                  style = Gl.type.meta,
-                  color = c.textTertiary,
-                  modifier = Modifier.padding(horizontal = GlSpace.margin, vertical = 6.dp),
-                )
-              }
-            }
-            itemsIndexed(parsed) { _, line ->
-              Text(
-                text = if (line.isEmpty()) AnnotatedString(" ") else line,
-                style = style,
-                color = c.textPrimary,
-                softWrap = false,
-                maxLines = 1,
-                modifier = Modifier.padding(horizontal = GlSpace.margin),
-              )
-            }
+      val longest = remember(parsed) { (parsed.maxOfOrNull { it.text.length } ?: 0).coerceAtMost(600) }
+      val contentWidth = with(LocalDensity.current) { (charWidth * (longest + 8 + if (timestamps) 14 else 0)).toDp() } + 32.dp
+      val numberWidth = with(LocalDensity.current) { (charWidth * ((parsed.lastOrNull()?.number ?: 0).toString().length + 1)).toDp() }
+      Column(modifier.fillMaxWidth().background(JobConsoleBackground)) {
+        Row(
+          Modifier.fillMaxWidth().background(Color(0xFF242329)).padding(start = 16.dp, end = 4.dp),
+          verticalAlignment = Alignment.CenterVertically,
+        ) {
+          Text("Job log", style = Gl.type.label, color = JobConsoleForeground)
+          Spacer(Modifier.weight(1f))
+          TextButton(onClick = { timestamps = !timestamps }, modifier = Modifier.semantics { contentDescription = if (timestamps) "Hide timestamps" else "Show timestamps" }) {
+            Text("Time", style = Gl.type.meta, color = if (timestamps) Color(0xFF5797FF) else JobConsoleMuted)
+          }
+          TextButton(onClick = { wrap = !wrap }, modifier = Modifier.semantics { contentDescription = if (wrap) "Disable line wrapping" else "Wrap lines" }) {
+            Text("Wrap", style = Gl.type.meta, color = if (wrap) Color(0xFF5797FF) else JobConsoleMuted)
           }
         }
-        GlButton(
-          text = "Jump to end",
-          icon = Icons.Outlined.KeyboardDoubleArrowDown,
-          kind = GlButtonKind.Secondary,
-          onClick = { scope.launch { if (total > 0) listState.animateScrollToItem(total - 1) } },
-          modifier = Modifier
-            .align(Alignment.BottomEnd)
-            .navigationBarsPadding()
-            .padding(GlSpace.margin),
-        )
+        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
+          val viewportWidth = maxWidth
+          val horizontal = rememberScrollState()
+          Box(Modifier.fillMaxSize().then(if (wrap) Modifier else Modifier.horizontalScroll(horizontal))) {
+            LazyColumn(
+              state = listState,
+              modifier = Modifier.width(if (wrap) viewportWidth else contentWidth.coerceAtLeast(viewportWidth)).fillMaxHeight(),
+              contentPadding = PaddingValues(top = 10.dp, bottom = 20.dp),
+            ) {
+              if (trace.truncated) {
+                item(key = "truncated") {
+                  Text("Showing the last 256 KB. Open in the browser for the full log.", style = Gl.type.meta, color = JobConsoleMuted, modifier = Modifier.padding(16.dp))
+                }
+              }
+              itemsIndexed(visible, key = { _, line -> line.number }) { _, line ->
+                val section = line.sectionKey
+                val isCollapsed = section in collapsed
+                Row(
+                  modifier = Modifier.fillMaxWidth()
+                    .then(if (section != null) Modifier.background(Color(0xFF242329)).clickable {
+                      overrides = overrides + (section to !isCollapsed)
+                    }.semantics { contentDescription = if (isCollapsed) "Expand log section" else "Collapse log section" } else Modifier)
+                    .padding(horizontal = 12.dp, vertical = if (section != null) 6.dp else 1.dp),
+                  verticalAlignment = Alignment.Top,
+                ) {
+                  Text(line.number.toString(), style = style, color = JobConsoleMuted, textAlign = TextAlign.End, modifier = Modifier.width(numberWidth))
+                  Spacer(Modifier.width(12.dp))
+                  if (timestamps) {
+                    Text(line.timestamp.orEmpty(), style = style, color = JobConsoleMuted, modifier = Modifier.width(100.dp))
+                    Spacer(Modifier.width(8.dp))
+                  }
+                  if (section != null) {
+                    Text(if (isCollapsed) "▸ " else "▾ ", style = style, color = JobConsoleMuted)
+                  }
+                  SelectionContainer(Modifier.weight(1f)) {
+                    Text(
+                      text = if (line.text.isEmpty()) AnnotatedString(" ") else line.text,
+                      style = if (section != null) style.copy(fontWeight = FontWeight.Bold) else style,
+                      color = JobConsoleForeground,
+                      softWrap = wrap,
+                    )
+                  }
+                }
+              }
+            }
+          }
+          val atEnd by remember { derivedStateOf { !listState.canScrollForward } }
+          if (!atEnd) GlButton(
+            text = "Jump to end",
+            icon = Icons.Outlined.KeyboardDoubleArrowDown,
+            kind = GlButtonKind.Secondary,
+            onClick = { scope.launch { if (total > 0) listState.animateScrollToItem(total - 1) } },
+            modifier = Modifier.align(Alignment.BottomEnd).navigationBarsPadding().padding(GlSpace.margin),
+          )
+        }
       }
     }
   }
@@ -539,82 +576,4 @@ private fun humanFailure(reason: String): String = when (reason) {
   "unmet_prerequisites" -> "The job's prerequisites weren't met. Check its configuration."
   "job_execution_timeout" -> "The job ran longer than its timeout."
   else -> reason.replace('_', ' ').replaceFirstChar { it.uppercase() }
-}
-
-// ---------------------------------------------------------------------------------------------
-// Log parsing
-// ---------------------------------------------------------------------------------------------
-
-private val SECTION_START = Regex("""section_start:\d+:([A-Za-z0-9_.\-]+)(\[[^\]]*])?\r?(\u001B\[0K)?""")
-private val SECTION_END = Regex("""section_end:\d+:[A-Za-z0-9_.\-]+\r?(\u001B\[0K)?""")
-private val ESCAPE = Regex("""\u001B\[([0-9;]*)([A-Za-z])""")
-
-/** Turns a GitLab job trace into styled lines: ANSI colors applied, section markers readable. */
-private fun parseTrace(raw: String, colors: GlColors): List<AnnotatedString> {
-  val out = ArrayList<AnnotatedString>()
-  raw.split('\n').forEach { rawLine ->
-    var line = rawLine
-    var header: String? = null
-    SECTION_START.find(line)?.let { match ->
-      header = match.groupValues[1]
-      line = line.removeRange(match.range)
-    }
-    line = SECTION_END.replace(line, "")
-    // A carriage return redraws the line; keep what was drawn last.
-    if ('\r' in line) {
-      val parts = line.split('\r').filter { it.isNotEmpty() }
-      line = parts.lastOrNull().orEmpty()
-    }
-    val heading = header
-    if (heading != null && line.isBlank()) {
-      out += buildAnnotatedString {
-        withStyle(SpanStyle(fontWeight = FontWeight.SemiBold, color = colors.textSecondary)) { append("▸ ${humanSection(heading)}") }
-      }
-      return@forEach
-    }
-    if (rawLine.isNotEmpty() && line.isEmpty() && SECTION_END.containsMatchIn(rawLine)) return@forEach
-    out += ansiLine(line, colors)
-  }
-  while (out.isNotEmpty() && out.last().isEmpty()) out.removeAt(out.lastIndex)
-  return out
-}
-
-private fun humanSection(name: String): String = name
-  .removePrefix("step_")
-  .replace('_', ' ')
-  .replace('-', ' ')
-  .replaceFirstChar { it.uppercase() }
-
-private fun ansiLine(line: String, colors: GlColors): AnnotatedString = buildAnnotatedString {
-  var color: Color? = null
-  var bold = false
-  var last = 0
-  fun appendChunk(text: String) {
-    if (text.isEmpty()) return
-    val style = SpanStyle(color = color ?: Color.Unspecified, fontWeight = if (bold) FontWeight.SemiBold else null)
-    withStyle(style) { append(text) }
-  }
-  ESCAPE.findAll(line).forEach { match ->
-    appendChunk(line.substring(last, match.range.first))
-    last = match.range.last + 1
-    if (match.groupValues[2] != "m") return@forEach
-    val codes = match.groupValues[1].split(';').mapNotNull { it.toIntOrNull() }.ifEmpty { listOf(0) }
-    codes.forEach { code ->
-      when (code) {
-        0 -> { color = null; bold = false }
-        1 -> bold = true
-        22 -> bold = false
-        39 -> color = null
-        30, 90 -> color = colors.textTertiary
-        31, 91 -> color = colors.danger
-        32, 92 -> color = colors.success
-        33, 93 -> color = colors.warning
-        34, 94 -> color = colors.info
-        35, 95 -> color = colors.syntaxKeyword
-        36, 96 -> color = colors.syntaxLiteral
-        37, 97 -> color = colors.textPrimary
-      }
-    }
-  }
-  appendChunk(line.substring(last).replace("\u001B", ""))
 }

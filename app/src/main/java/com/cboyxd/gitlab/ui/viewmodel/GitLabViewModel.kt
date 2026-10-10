@@ -9,6 +9,7 @@ import com.cboyxd.gitlab.data.api.GitLabApiClient
 import com.cboyxd.gitlab.data.api.GitLabApiException
 import com.cboyxd.gitlab.data.api.formatGitLabTime
 import com.cboyxd.gitlab.data.auth.GitLabAuth
+import com.cboyxd.gitlab.data.auth.GitLabSessionTokens
 import com.cboyxd.gitlab.data.auth.GitLabOAuth
 import com.cboyxd.gitlab.data.auth.GitLabPasswordLogin
 import com.cboyxd.gitlab.data.auth.PasswordLoginOutcome
@@ -40,8 +41,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.withContext
 
 /**
@@ -54,7 +54,7 @@ import kotlinx.coroutines.withContext
  */
 class GitLabViewModel(application: Application) : AndroidViewModel(application) {
 
-  private val store = InstanceStore(application)
+  private val store = InstanceStore.get(application)
   private val repository = GitLabRepository()
 
   private val _uiState = MutableStateFlow(GitLabUiState())
@@ -104,7 +104,6 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   /** Groups, people, search and in-app links. */
   val explore = ExploreFeature(host)
 
-  private val refreshMutex = Mutex()
   private var passwordLogin: GitLabPasswordLogin? = null
   private var pendingServerName: String = ""
   private var pendingServerUrl: String = ""
@@ -720,40 +719,23 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
    */
   private suspend fun freshInstance(forceRefresh: Boolean = false, staleToken: String? = null): GitLabInstance? {
     val current = _uiState.value.activeInstance ?: return null
-    if (current.authKind != GitLabAuth.KIND_OAUTH || current.refreshToken.isBlank()) return current
-    val nowSec = System.currentTimeMillis() / 1000
-    if (!forceRefresh && current.tokenExpiresAt > nowSec + 60) return current
-    return refreshMutex.withLock {
-      val latest = _uiState.value.activeInstance?.takeIf { it.id == current.id } ?: return@withLock null
-      val stillExpired = latest.tokenExpiresAt <= System.currentTimeMillis() / 1000 + 60
-      val alreadyRotated = staleToken != null && latest.token != staleToken
-      if (alreadyRotated || (!forceRefresh && !stillExpired)) return@withLock latest
-      withContext(NonCancellable) {
-        val clientId = latest.oauthClientId.ifBlank { runStorage { store.getGitLabComClientId() }.getOrDefault("") }
-        if (clientId.isBlank()) return@withContext latest
-        val refreshed = try {
-          withContext(Dispatchers.IO) { GitLabOAuth.refresh(latest.url, clientId, latest.refreshToken) }
-        } catch (_: Exception) {
-          _uiState.update { it.copy(sessionExpired = true) }
-          return@withContext latest
-        }
-        val updated = latest.copy(
-          token = refreshed.accessToken,
-          refreshToken = refreshed.refreshToken.ifBlank { latest.refreshToken },
-          tokenExpiresAt = refreshed.expiresAtEpochSec,
-          oauthClientId = clientId
-        )
-        runStorage { store.updateInstance(updated) }
-        _uiState.update { state ->
-          state.copy(
-            activeInstance = if (state.activeInstance?.id == updated.id) updated else state.activeInstance,
-            savedInstances = state.savedInstances.map { if (it.id == updated.id) updated else it },
-            sessionExpired = false,
-          )
-        }
-        updated
-      }
+    if (current.token.isBlank()) return current
+    val updated = try {
+      GitLabSessionTokens.fresh(store, current.id, forceRefresh, staleToken) ?: return null
+    } catch (cancel: CancellationException) {
+      throw cancel
+    } catch (_: Exception) {
+      _uiState.update { if (it.activeInstance?.id == current.id) it.copy(sessionExpired = true) else it }
+      return current
     }
+    _uiState.update { state ->
+      state.copy(
+        activeInstance = if (state.activeInstance?.id == updated.id) updated else state.activeInstance,
+        savedInstances = state.savedInstances.map { if (it.id == updated.id) updated else it },
+        sessionExpired = if (state.activeInstance?.id == updated.id && updated.token != current.token) false else state.sessionExpired,
+      )
+    }
+    return updated.takeIf { _uiState.value.activeInstance?.id == current.id }
   }
 
   /** Runs a request against the active server; on 401 with OAuth, refreshes once and retries. */
@@ -1020,6 +1002,35 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
 
   fun setInboxFilter(filter: InboxFilter) {
     _uiState.update { it.copy(inboxFilter = filter) }
+  }
+
+  fun refreshNotificationInbox() {
+    if (!_uiState.value.isSignedIn) return
+    session.launch {
+      api { repository.getTodos(it) }.onSuccess { list ->
+        _uiState.update { it.copy(notifications = it.notifications.success(list.map { todo -> todo.toNotification() })) }
+      }
+    }
+  }
+
+  fun openSystemNotification(accountId: String, targetType: String, projectId: Long, iid: Long, url: String) {
+    viewModelScope.launch {
+      _uiState.first { it.bootstrapped }
+      if (_uiState.value.savedInstances.none { it.id == accountId && it.token.isNotBlank() }) {
+        notify("This account is no longer signed in")
+        return@launch
+      }
+      if (_uiState.value.activeInstance?.id != accountId) {
+        switchInstance(accountId)
+        if (withTimeoutOrNull(15_000) { _uiState.first { it.activeInstance?.id == accountId } } == null) return@launch
+      }
+      when {
+        targetType == "MergeRequest" && projectId > 0 && iid > 0 -> navigateTo(ScreenDestination.MergeRequestDetail(projectId, iid))
+        targetType == "Issue" && projectId > 0 && iid > 0 -> navigateTo(ScreenDestination.IssueDetail(projectId, iid))
+        url.isNotBlank() -> if (!explore.handleLink(url)) host.openExternal(url)
+        else -> switchTab(BottomTab.INBOX)
+      }
+    }
   }
 
   fun markNotificationDone(id: String) {

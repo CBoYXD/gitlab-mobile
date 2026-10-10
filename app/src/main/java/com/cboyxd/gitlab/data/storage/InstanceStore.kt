@@ -134,7 +134,13 @@ class InstanceStore(context: Context) {
     return id in SEEDED_IDS && username in SEEDED_USERS
   }
 
-  private companion object {
+  companion object {
+    @Volatile private var shared: InstanceStore? = null
+
+    fun get(context: Context): InstanceStore = shared ?: synchronized(this) {
+      shared ?: InstanceStore(context.applicationContext).also { shared = it }
+    }
+
     const val PREFS_NAME = "gitlab_mobile_prefs"
     const val SECRET_PREFS_NAME = "gitlab_mobile_secrets"
     const val KEY_INSTANCES = "saved_instances"

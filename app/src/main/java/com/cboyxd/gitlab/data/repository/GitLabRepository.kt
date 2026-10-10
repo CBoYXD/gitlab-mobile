@@ -270,6 +270,22 @@ class GitLabRepository {
     }
   }
 
+  /** Raw timestamps are retained for background event detection. */
+  suspend fun getNotificationMergeRequests(instance: GitLabInstance, scope: String, updatedAfter: String? = null): Result<List<GitLabMergeRequest>> = call {
+    requireToken(instance)
+    fetchPages(maxPages = 5) { page ->
+      service(instance).getMergeRequests(
+        scope = if (scope == "reviews_for_me" && instance.username.isNotBlank()) "all" else scope,
+        reviewerUsername = instance.username.takeIf { scope == "reviews_for_me" && it.isNotBlank() },
+        state = if (scope == "created_by_me") "all" else "opened",
+        perPage = 100,
+        withLabelDetails = false,
+        page = page,
+        updatedAfter = updatedAfter,
+      )
+    }
+  }
+
   suspend fun getMergeRequest(instance: GitLabInstance, projectId: Long, iid: Long): Result<GitLabMergeRequest> = call {
     service(instance).getMergeRequest(projectId, iid).requireBody().withDisplayTimes()
   }

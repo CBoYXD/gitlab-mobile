@@ -199,7 +199,8 @@ interface GitLabApiService {
     @Query("sort") sort: String = "desc",
     @Query("per_page") perPage: Int = 50,
     @Query("with_labels_details") withLabelDetails: Boolean = true,
-    @Query("page") page: Int = 1
+    @Query("page") page: Int = 1,
+    @Query("updated_after") updatedAfter: String? = null
   ): Response<List<GitLabMergeRequest>>
 
   @GET("api/v4/projects/{id}/merge_requests")

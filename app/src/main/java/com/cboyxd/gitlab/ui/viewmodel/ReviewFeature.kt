@@ -42,6 +42,7 @@ class ReviewFeature internal constructor(
           mergeRequest = seeded.start(),
           diffs = emptyFeed<com.cboyxd.gitlab.data.model.GitLabFileDiff>().start(),
           notes = emptyFeed<com.cboyxd.gitlab.data.model.GitLabNote>().start(),
+          discussions = emptyFeed<com.cboyxd.gitlab.data.model.GitLabDiscussion>().start(),
           commits = emptyFeed<com.cboyxd.gitlab.data.model.GitLabCommit>().start(),
           pipelines = emptyFeed<com.cboyxd.gitlab.data.model.GitLabPipeline>().start(),
           approvals = Loadable<com.cboyxd.gitlab.data.model.GitLabApprovals?>(null).start(),
@@ -59,7 +60,11 @@ class ReviewFeature internal constructor(
         }
       }
       launch { val r = host.api { repo.getMergeRequestDiffs(it, projectId, iid) }; apply(projectId, iid) { it.copy(diffs = it.diffs.settle(r)) } }
-      launch { val r = host.api { repo.getMergeRequestNotes(it, projectId, iid) }; apply(projectId, iid) { it.copy(notes = it.notes.settle(r)) } }
+      launch {
+        val r = host.api { repo.getMergeRequestDiscussions(it, projectId, iid) }
+        val previews = r.getOrNull()?.let { threads -> host.api { Result.success(repo.getDiscussionDiffs(it, projectId, threads)) }.getOrDefault(emptyMap()) }.orEmpty()
+        apply(projectId, iid) { it.copy(discussions = it.discussions.settle(r), discussionDiffs = previews, notes = it.notes.settle(r.map { threads -> threads.flatMap { d -> d.notes }.distinctBy { n -> n.id } })) }
+      }
       launch { val r = host.api { repo.getMergeRequestCommits(it, projectId, iid) }; apply(projectId, iid) { it.copy(commits = it.commits.settle(r)) } }
       launch { val r = host.api { repo.getMergeRequestPipelines(it, projectId, iid) }; apply(projectId, iid) { it.copy(pipelines = it.pipelines.settle(r)) } }
       launch { val r = host.api { repo.getMergeRequestApprovals(it, projectId, iid) }; apply(projectId, iid) { it.copy(approvals = it.approvals.settle(r)) } }
@@ -115,7 +120,7 @@ class ReviewFeature internal constructor(
     host.session.launch {
       host.api { host.repository.createMergeRequestNote(it, mr.projectId, mr.iid, body) }.fold(
         onSuccess = { note ->
-          apply(mr.projectId, mr.iid) { it.copy(posting = false, notes = it.notes.copy(data = it.notes.data + note)) }
+          apply(mr.projectId, mr.iid) { it.copy(posting = false, notes = it.notes.copy(data = it.notes.data + note), discussions = it.discussions.copy(data = it.discussions.data + com.cboyxd.gitlab.data.model.GitLabDiscussion("note-${note.id}", individualNote = true, notes = listOf(note)))) }
           onResult(null)
         },
         onFailure = { error ->

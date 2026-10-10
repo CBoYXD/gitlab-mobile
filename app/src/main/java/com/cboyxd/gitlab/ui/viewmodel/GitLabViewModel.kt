@@ -204,7 +204,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
       is ScreenDestination.PipelineDetail -> ready(s.pipelineDetail.pipeline, s.pipelineDetail.jobs)
       is ScreenDestination.JobDetail -> ready(s.jobDetail.job, s.jobDetail.trace)
       is ScreenDestination.IssueDetail -> ready(s.issueDetail.issue, s.issueDetail.notes)
-      is ScreenDestination.MergeRequestDetail -> s.mergeRequestDetail.run { ready(mergeRequest, diffs, notes, commits, pipelines, approvals) }
+      is ScreenDestination.MergeRequestDetail -> s.mergeRequestDetail.run { ready(mergeRequest, diffs, notes, discussions, commits, pipelines, approvals) }
       is ScreenDestination.UserDetail -> s.userDetail.run { ready(user, projects, events) }
       is ScreenDestination.GroupProjects -> s.group.run { ready(details, subgroups, projects) }
       else -> true

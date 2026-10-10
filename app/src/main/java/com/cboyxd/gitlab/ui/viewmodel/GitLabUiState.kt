@@ -230,6 +230,8 @@ data class MergeRequestDetailState(
   val mergeRequest: Loadable<GitLabMergeRequest?> = Loadable(null),
   val diffs: Loadable<List<GitLabFileDiff>> = emptyFeed(),
   val notes: Loadable<List<GitLabNote>> = emptyFeed(),
+  val discussions: Loadable<List<com.cboyxd.gitlab.data.model.GitLabDiscussion>> = emptyFeed(),
+  val discussionDiffs: Map<String, GitLabFileDiff> = emptyMap(),
   val commits: Loadable<List<GitLabCommit>> = emptyFeed(),
   val pipelines: Loadable<List<GitLabPipeline>> = emptyFeed(),
   val approvals: Loadable<GitLabApprovals?> = Loadable(null),

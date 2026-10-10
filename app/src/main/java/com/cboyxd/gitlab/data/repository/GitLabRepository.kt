@@ -610,6 +610,26 @@ class GitLabRepository {
   // Merge request details
   // ---------------------------------------------------------------------------------------------
 
+  suspend fun getMergeRequestDiscussions(instance: GitLabInstance, projectId: Long, iid: Long): Result<List<com.cboyxd.gitlab.data.model.GitLabDiscussion>> = call {
+    fetchPages(maxPages = 100) { page -> service(instance).getMergeRequestDiscussions(projectId, iid, page = page) }
+      .sortedBy { it.notes.firstOrNull()?.createdAt.orEmpty() }
+      .map { discussion -> discussion.copy(notes = discussion.notes.sortedBy { it.createdAt }.map { it.withDisplayTimes() }) }
+  }
+
+  /** Compare the stored commits, so older threads never show unrelated code from the latest revision. */
+  suspend fun getDiscussionDiffs(instance: GitLabInstance, projectId: Long, discussions: List<com.cboyxd.gitlab.data.model.GitLabDiscussion>): Map<String, GitLabFileDiff> = coroutineScope {
+    val positioned = discussions.mapNotNull { d -> d.notes.firstOrNull { it.position != null }?.position?.let { d.id to it } }
+    val gate = Semaphore(3)
+    positioned.groupBy { (_, p) -> p.baseSha to p.headSha }.map { (revision, threads) -> async {
+      gate.withPermit {
+        val files = if (revision.first.isBlank() || revision.second.isBlank()) emptyList() else call {
+          service(instance).compareDiscussionRevision(projectId, revision.first, revision.second).requireBody().diffs
+        }.getOrDefault(emptyList())
+        threads.mapNotNull { (id, p) -> files.firstOrNull { it.oldPath == p.oldPath && it.newPath == p.newPath }?.let { id to it } }
+      }
+    } }.awaitAll().flatten().toMap()
+  }
+
   suspend fun getMergeRequestNotes(instance: GitLabInstance, projectId: Long, iid: Long): Result<List<GitLabNote>> = call {
     fetchPages(maxPages = 5) { page -> service(instance).getMergeRequestNotes(projectId, iid, page = page) }
       .map { it.withDisplayTimes() }

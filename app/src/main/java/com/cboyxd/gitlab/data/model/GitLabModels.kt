@@ -484,7 +484,8 @@ data class GitLabNote(
   val type: String? = null,
   val resolvable: Boolean = false,
   val resolved: Boolean? = null,
-  val internal: Boolean? = null
+  val internal: Boolean? = null,
+  val position: GitLabDiffPosition? = null
 )
 
 @JsonClass(generateAdapter = true)
@@ -520,3 +521,24 @@ data class GitLabIssueStatistics(val statistics: GitLabIssueStatisticsBody = Git
 
 /** Exact open counts for a project page; null when the server doesn't say (feature off, or over 10k). */
 data class ProjectCounts(val openIssues: Int?, val openMergeRequests: Int?)
+
+@JsonClass(generateAdapter = true)
+data class GitLabDiscussion(
+  val id: String,
+  @Json(name = "individual_note") val individualNote: Boolean = false,
+  val notes: List<GitLabNote> = emptyList(),
+)
+
+@JsonClass(generateAdapter = true)
+data class GitLabDiffPosition(
+  @Json(name = "base_sha") val baseSha: String = "",
+  @Json(name = "head_sha") val headSha: String = "",
+  @Json(name = "old_path") val oldPath: String = "",
+  @Json(name = "new_path") val newPath: String = "",
+  @Json(name = "position_type") val positionType: String = "text",
+  @Json(name = "old_line") val oldLine: Int? = null,
+  @Json(name = "new_line") val newLine: Int? = null,
+)
+
+@JsonClass(generateAdapter = true)
+data class GitLabComparison(val diffs: List<GitLabFileDiff> = emptyList())

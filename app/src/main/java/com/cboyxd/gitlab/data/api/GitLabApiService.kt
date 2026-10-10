@@ -46,6 +46,23 @@ data class MergeRequestChangesResponse(
 
 interface GitLabApiService {
 
+  @GET("api/v4/projects/{id}/merge_requests/{mr_iid}/discussions")
+  suspend fun getMergeRequestDiscussions(
+    @Path("id") projectId: Long,
+    @Path("mr_iid") mrIid: Long,
+    @Query("per_page") perPage: Int = 100,
+    @Query("page") page: Int = 1,
+  ): Response<List<com.cboyxd.gitlab.data.model.GitLabDiscussion>>
+
+  @GET("api/v4/projects/{id}/repository/compare")
+  suspend fun compareDiscussionRevision(
+    @Path("id") projectId: Long,
+    @Query("from") baseSha: String,
+    @Query("to") headSha: String,
+    @Query("straight") straight: Boolean = true,
+  ): Response<com.cboyxd.gitlab.data.model.GitLabComparison>
+
+
   @GET("api/v4/user")
   suspend fun getCurrentUser(): Response<GitLabUser>
 

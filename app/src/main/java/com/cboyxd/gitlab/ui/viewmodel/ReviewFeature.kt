@@ -126,6 +126,9 @@ class ReviewFeature internal constructor(
     }
   }
 
+  suspend fun branches(projectId: Long, search: String): Result<List<com.cboyxd.gitlab.data.model.GitLabBranch>> =
+    host.api { host.repository.getBranches(it, projectId, search) }
+
   fun create(projectId: Long, title: String, source: String, target: String, description: String?, onResult: (String?) -> Unit) {
     host.session.launch {
       host.api {
@@ -133,10 +136,16 @@ class ReviewFeature internal constructor(
       }.fold(
         onSuccess = { mr ->
           host.state.update { s ->
-            s.copy(mergeRequests = s.mergeRequests.copy(data = listOf(mr) + s.mergeRequests.data.filterNot { it.projectId == mr.projectId && it.iid == mr.iid }))
+            s.copy(
+              mergeRequests = s.mergeRequests.copy(data = listOf(mr) + s.mergeRequests.data.filterNot { it.projectId == mr.projectId && it.iid == mr.iid }),
+              project = if (s.project.projectId == mr.projectId) s.project.copy(
+                mergeRequests = s.project.mergeRequests.copy(data = listOf(mr) + s.project.mergeRequests.data.filterNot { it.iid == mr.iid }),
+              ) else s.project,
+            )
           }
           onResult(null)
           host.notify("Merge request !${mr.iid} created")
+          open(mr)
         },
         onFailure = { error -> onResult(error.userMessage()) }
       )

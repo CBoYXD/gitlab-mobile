@@ -346,6 +346,9 @@ class GitLabRepository {
   ): Result<GitLabMergeRequest> = call {
     requireToken(instance)
     if (projectId <= 0) throw GitLabApiException(400, "Choose a project for the merge request.")
+    if (title.isBlank()) throw GitLabApiException(400, "Enter a title for the merge request.")
+    if (sourceBranch.isBlank() || targetBranch.isBlank()) throw GitLabApiException(400, "Choose both branches.")
+    if (sourceBranch == targetBranch) throw GitLabApiException(400, "Source and target branches must be different.")
     service(instance).createMergeRequest(projectId, title, sourceBranch, targetBranch, description)
       .requireBody().withDisplayTimes()
   }
@@ -374,7 +377,7 @@ class GitLabRepository {
   ): Result<List<GitLabFileDiff>> = call {
     val service = service(instance)
     try {
-      fetchPages(maxPages = 4) { page -> service.getMergeRequestDiffs(projectId, mrIid, perPage = 30, page = page) }
+      fetchPages(maxPages = 100) { page -> service.getMergeRequestDiffs(projectId, mrIid, perPage = 100, page = page) }
     } catch (error: GitLabApiException) {
       // The /diffs endpoint arrived in GitLab 15.7; older servers only have /changes.
       if (error.code != 404) throw error

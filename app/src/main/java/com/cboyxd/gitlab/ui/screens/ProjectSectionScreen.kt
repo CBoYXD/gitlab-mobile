@@ -27,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.Adjust
 import androidx.compose.material.icons.outlined.CallMerge
@@ -99,6 +100,8 @@ fun ProjectSectionScreen(
   onRetry: (ProjectSection) -> Unit,
   onOpenIssue: (GitLabIssue) -> Unit,
   onOpenMergeRequest: (GitLabMergeRequest) -> Unit,
+  onCreateMergeRequest: (Long, String, String, String, String?, (String?) -> Unit) -> Unit,
+  onLoadBranches: suspend (Long, String) -> Result<List<GitLabBranch>>,
   onOpenPipeline: (GitLabPipeline) -> Unit,
   onRetryPipeline: (GitLabPipeline) -> Unit,
   onOpenCommit: (String) -> Unit,
@@ -109,8 +112,21 @@ fun ProjectSectionScreen(
   modifier: Modifier = Modifier,
 ) {
   val retry = { onRetry(section) }
+  var creating by rememberSaveable(state.projectId) { mutableStateOf(false) }
+  if (creating && state.project.data != null) {
+    CreateMergeRequestSheet(
+      projects = listOf(state.project.data),
+      onCreate = onCreateMergeRequest,
+      onLoadBranches = onLoadBranches,
+      onDismiss = { creating = false },
+    )
+  }
   Column(modifier = modifier.fillMaxSize().background(Gl.colors.bg)) {
-    GlTopBar(title = section.title, overline = state.project.data?.nameWithNamespace, onBack = onBack)
+    GlTopBar(title = section.title, overline = state.project.data?.nameWithNamespace, onBack = onBack) {
+      if (section == ProjectSection.MERGE_REQUESTS && canWrite && state.project.data != null) {
+        com.cboyxd.gitlab.ui.components.GlIconAction(Icons.Outlined.Add, "New merge request", onClick = { creating = true })
+      }
+    }
     when (section) {
       ProjectSection.ISSUES -> {
         var filter by rememberSaveable { mutableStateOf(SectionIssueFilter.OPEN) }

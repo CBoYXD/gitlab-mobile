@@ -401,6 +401,7 @@ private fun Destination(
       projects = uiState.projects.data,
       onSelectMergeRequest = viewModel::openMergeRequest,
       onCreateMergeRequest = viewModel.review::create,
+      onLoadBranches = viewModel.review::branches,
       onRetry = { viewModel.refreshDashboard(userInitiated = true) },
       onBack = back,
     )
@@ -511,6 +512,8 @@ private fun Destination(
       onRetry = viewModel.code::retrySection,
       onOpenIssue = viewModel::openIssue,
       onOpenMergeRequest = viewModel::openMergeRequest,
+      onCreateMergeRequest = viewModel.review::create,
+      onLoadBranches = viewModel.review::branches,
       onOpenPipeline = { viewModel.ci.openPipeline(it.projectId, it.id) },
       onRetryPipeline = viewModel::retryPipeline,
       onOpenCommit = { viewModel.code.openCommit(project.projectId, it) },

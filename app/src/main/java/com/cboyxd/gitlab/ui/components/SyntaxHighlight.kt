@@ -161,3 +161,33 @@ fun rememberHighlighted(code: String, language: SyntaxLanguage): AnnotatedString
   }
   return highlighted
 }
+
+/** Source formatting for document files, plus multiline Python strings in diff hunks. */
+fun highlightForPath(code: String, path: String, colors: GlColors): AnnotatedString {
+  if (code.length > MAX_HIGHLIGHT_CHARS) return AnnotatedString(code)
+  val extension = path.substringAfterLast('.', "").lowercase()
+  if (extension in setOf("md", "markdown", "mdown")) {
+    return buildAnnotatedString {
+      append(code)
+      fun paint(pattern: String, color: Color, bold: Boolean = false) {
+        Regex(pattern, RegexOption.MULTILINE).findAll(code).forEach { match ->
+          addStyle(SpanStyle(color = color, fontWeight = if (bold) FontWeight.SemiBold else null), match.range.first, match.range.last + 1)
+        }
+      }
+      paint("^#{1,6} .*$", colors.syntaxLiteral, bold = true)
+      paint("^\\s*(?:[-*+] |[0-9]+[.)] )", colors.syntaxMeta)
+      paint("\\*\\*[^\\n]+?\\*\\*|__[^\\n]+?__", colors.syntaxLiteral, bold = true)
+      paint("\\[[^\\]\\n]+\\]\\([^\\n)]+\\)", colors.syntaxString)
+      paint("`[^`\\n]+`", colors.syntaxString)
+      paint("^[ \\t]*(```|~~~).*$", colors.syntaxComment)
+    }
+  }
+  val base = highlight(code, languageForPath(path), colors)
+  if (extension !in setOf("py", "pyi")) return base
+  return buildAnnotatedString {
+    append(base)
+    Regex("\"\"\"[\\s\\S]*?\"\"\"|'''[\\s\\S]*?'''").findAll(code).forEach { match ->
+      addStyle(SpanStyle(color = colors.syntaxString), match.range.first, match.range.last + 1)
+    }
+  }
+}

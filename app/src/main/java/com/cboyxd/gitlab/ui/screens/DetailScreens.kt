@@ -10,6 +10,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.foundation.ScrollState
+import com.cboyxd.gitlab.ui.components.DiffOptionsSheet
+import com.cboyxd.gitlab.ui.components.LocalDiffDisplayOptions
+import com.cboyxd.gitlab.ui.components.rememberDiffDisplayOptions
 import com.cboyxd.gitlab.ui.components.LocalDiffScrollStates
 import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
@@ -46,6 +49,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.Info
+import androidx.compose.material.icons.outlined.Settings
+import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CallMerge
@@ -559,79 +565,78 @@ private fun MergeRequestOverview(
     when {
       mr == null && state.mergeRequest.error != null -> FullScreenState { ErrorState(state.mergeRequest.error, onRetry) }
       mr == null -> FullScreenState { LoadingState(label = "Loading merge request") }
-      else -> Box(Modifier.weight(1f).fillMaxWidth()) {
-        LazyColumn(
-          state = listState,
-          modifier = Modifier.fillMaxSize(),
-          contentPadding = PaddingValues(bottom = FloatingActionsClearance),
-        ) {
-          item(key = "header") {
-            DetailHeader(reference = reference, title = mr.title) {
-              DetailStatePill(mergeRequestStateStyle(mr.state, mr.isDraft))
-              DetailRefPill(mr.sourceBranch)
-              Icon(
-                Icons.AutoMirrored.Outlined.ArrowForward,
-                contentDescription = "into",
-                tint = c.textSecondary,
-                modifier = Modifier.size(18.dp).align(Alignment.CenterVertically),
+      else -> {
+        Box(Modifier.weight(1f).fillMaxWidth()) {
+          LazyColumn(
+            state = listState,
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 16.dp),
+          ) {
+            item(key = "header") {
+              DetailHeader(reference = reference, title = mr.title) {
+                DetailStatePill(mergeRequestStateStyle(mr.state, mr.isDraft))
+                DetailRefPill(mr.sourceBranch)
+                Icon(
+                  Icons.AutoMirrored.Outlined.ArrowForward,
+                  contentDescription = "into",
+                  tint = c.textSecondary,
+                  modifier = Modifier.size(18.dp).align(Alignment.CenterVertically),
+                )
+                DetailRefPill(mr.targetBranch)
+                if (state.busy) BusyDot()
+              }
+            }
+            if (state.mergeRequest.error != null) {
+              item(key = "mr-error") {
+                InlineError(state.mergeRequest.error, Modifier.padding(horizontal = GlSpace.margin, vertical = 4.dp), onRetry = onRetry)
+              }
+            }
+            item(key = "post") {
+              AuthorPost(
+                author = mr.author,
+                age = mr.createdAt,
+                body = mr.description,
+                context = context,
+                onOpenUser = onOpenUser,
+                collapsible = true,
+              ) {
+                Reactions(mr.upvotes, mr.downvotes)
+              }
+            }
+
+            item(key = "changes-header") { DetailSectionHeader("Changes") }
+            item(key = "changes") { ChangesRows(state, onOpenPage) }
+
+            item(key = "status-header") { DetailSectionHeader("Status") }
+            item(key = "status") {
+              StatusRows(
+                mr = mr,
+                state = state,
+                canWrite = canWrite,
+                onRequestMerge = onRequestMerge,
+                onSetClosed = onSetClosed,
+                onOpenPipeline = onOpenPipeline,
+                onOpenUser = onOpenUser,
               )
-              DetailRefPill(mr.targetBranch)
-              if (state.busy) BusyDot()
             }
-          }
-          if (state.mergeRequest.error != null) {
-            item(key = "mr-error") {
-              InlineError(state.mergeRequest.error, Modifier.padding(horizontal = GlSpace.margin, vertical = 4.dp), onRetry = onRetry)
-            }
-          }
-          item(key = "review-navigation") {
-            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = GlSpace.margin, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-              GlButton("Changes${if (state.diffs.loaded) " (${state.diffs.data.size})" else ""}", onClick = { onOpenPage(MrPage.FILES) }, kind = GlButtonKind.Secondary, icon = Icons.Outlined.Difference)
-              GlButton("Commits", onClick = { onOpenPage(MrPage.COMMITS) }, kind = GlButtonKind.Ghost)
-              GlButton("Pipelines", onClick = { onOpenPage(MrPage.PIPELINES) }, kind = GlButtonKind.Ghost)
-            }
-          }
-          item(key = "post") {
-            AuthorPost(
-              author = mr.author,
-              age = mr.createdAt,
-              body = mr.description,
+
+            item(key = "timeline-header") { DetailSectionHeader("Conversation") }
+            timeline(
+              notes = state.notes,
+              labels = labels,
+              opener = mr.author,
               context = context,
               onOpenUser = onOpenUser,
-              collapsible = true,
-            ) {
-              Reactions(mr.upvotes, mr.downvotes)
-            }
-          }
-
-          item(key = "changes-header") { DetailSectionHeader("Changes") }
-          item(key = "changes") { ChangesRows(state, onOpenPage) }
-
-          item(key = "status-header") { DetailSectionHeader("Status") }
-          item(key = "status") {
-            StatusRows(
-              mr = mr,
-              state = state,
-              canWrite = canWrite,
-              onRequestMerge = onRequestMerge,
-              onSetClosed = onSetClosed,
-              onOpenPipeline = onOpenPipeline,
-              onOpenUser = onOpenUser,
+              onRetry = onRetry,
+              guest = !canWrite,
             )
           }
-
-          item(key = "timeline-header") { DetailSectionHeader("Conversation") }
-          timeline(
-            notes = state.notes,
-            labels = labels,
-            opener = mr.author,
-            context = context,
-            onOpenUser = onOpenUser,
-            onRetry = onRetry,
-            guest = !canWrite,
-          )
         }
-        DetailFloatingActions(onComment = if (canWrite) onComment else null, onInfo = onInfo)
+        GlDivider()
+        Row(Modifier.fillMaxWidth().background(c.surface).navigationBarsPadding().padding(horizontal = 16.dp, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+          if (canWrite) GlButton("Comment", onClick = onComment, kind = GlButtonKind.Secondary, icon = Icons.Outlined.ChatBubbleOutline, modifier = Modifier.weight(1f))
+          GlButton("Details", onClick = onInfo, kind = GlButtonKind.Secondary, icon = Icons.Outlined.Info, modifier = Modifier.then(if (!canWrite) Modifier.weight(1f) else Modifier))
+        }
       }
     }
   }
@@ -900,7 +905,8 @@ private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, 
   var collapsedPaths by rememberSaveable(state.projectId, state.iid) { mutableStateOf(emptyList<String>()) }
   var viewedPaths by rememberSaveable(state.projectId, state.iid) { mutableStateOf(emptyList<String>()) }
   var selectedPath by rememberSaveable(state.projectId, state.iid) { mutableStateOf<String?>(null) }
-  var wrapLines by rememberSaveable { mutableStateOf(true) }
+  val (options, changeOptions) = rememberDiffDisplayOptions()
+  var showingOptions by remember { mutableStateOf(false) }
   var pickingFile by remember { mutableStateOf(false) }
   val scrollStates = remember(diffs.data) { mutableMapOf<Int, ScrollState>() }
   val listState = rememberLazyListState()
@@ -911,35 +917,14 @@ private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, 
   val selectedFile = diffs.data.indices.firstOrNull { path(it) == selectedPath }
   Column(modifier = modifier.fillMaxSize().background(c.bg)) {
     GlTopBar(
-      title = "Changes",
-      overline = reference,
+      title = "Files changed",
       subtitle = if (diffs.loaded) "+${grouped(stats.added)} −${grouped(stats.removed)} · ${plural(diffs.data.size, "file", "files")}" else null,
       onBack = onBack,
     ) {
-      state.mergeRequest.data?.webUrl?.takeIf { it.isNotBlank() }?.let { url ->
-        com.cboyxd.gitlab.ui.components.GlIconAction(Icons.Outlined.OpenInNew, "Open changes in GitLab", onClick = { onOpenInBrowser("$url/diffs") })
-      }
+      com.cboyxd.gitlab.ui.components.GlIconAction(Icons.Outlined.FolderOpen, "Choose changed file", onClick = { pickingFile = true }, enabled = diffs.data.isNotEmpty())
+      com.cboyxd.gitlab.ui.components.GlIconAction(Icons.Outlined.Settings, "Code options", onClick = { showingOptions = true })
     }
     GlDivider()
-    if (diffs.data.isNotEmpty()) {
-      Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
-        GlButton(
-          selectedPath?.substringAfterLast('/') ?: "All files",
-          onClick = { pickingFile = true }, kind = GlButtonKind.Ghost,
-          icon = Icons.Outlined.KeyboardArrowDown, modifier = Modifier.weight(1f),
-        )
-        Text("Wrap", style = Gl.type.meta, color = c.textSecondary)
-        Switch(checked = wrapLines, onCheckedChange = { wrapLines = it })
-      }
-      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
-        Text("${viewed.size}/${diffs.data.size} viewed", style = Gl.type.meta, color = c.textSecondary, modifier = Modifier.weight(1f))
-        val allCollapsed = collapsed.size == diffs.data.size
-        GlButton(if (allCollapsed) "Expand all" else "Collapse all", onClick = {
-          collapsedPaths = if (allCollapsed) emptyList() else diffs.data.indices.map { path(it) }
-        }, kind = GlButtonKind.Ghost)
-      }
-      GlDivider()
-    }
     val error = diffs.error
     when {
       diffs.initialLoading -> FullScreenState { LoadingState(label = "Loading changes") }
@@ -947,7 +932,7 @@ private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, 
       diffs.data.isEmpty() -> FullScreenState {
         EmptyState(Icons.Outlined.Difference, "No changes available", "GitLab may still be preparing the changes for a new merge request. Refresh to check again.", actionLabel = "Refresh", onAction = onRetry)
       }
-      else -> CompositionLocalProvider(LocalDiffScrollStates provides scrollStates) {
+      else -> CompositionLocalProvider(LocalDiffScrollStates provides scrollStates, LocalDiffDisplayOptions provides options) {
         SelectionContainer(Modifier.weight(1f)) {
           LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = GlSpace.group)) {
             if (error != null) item(key = "diff-error") { InlineError(error, onRetry = onRetry, modifier = Modifier.padding(16.dp)) }
@@ -957,7 +942,7 @@ private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, 
               prepared = prepared.texts,
               collapsed = collapsed,
               viewed = viewed,
-              wrapLines = wrapLines,
+              wrapLines = options.wrapLines,
               selectedFile = selectedFile,
               onToggleCollapsed = { i -> val key = path(i); collapsedPaths = if (key in collapsedPaths) collapsedPaths - key else collapsedPaths + key },
               onToggleViewed = { i ->
@@ -974,6 +959,21 @@ private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, 
             item(key = "bottom") { Spacer(Modifier.navigationBarsPadding()) }
           }
         }
+      }
+    }
+  }
+  if (showingOptions) {
+    DiffOptionsSheet(options, onChange = changeOptions, onDismiss = { showingOptions = false }) {
+      Text("${viewed.size}/${diffs.data.size} files viewed", style = Gl.type.meta, color = c.textSecondary)
+      GlButton("Choose file", onClick = { showingOptions = false; pickingFile = true }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
+      val allCollapsed = collapsed.size == diffs.data.size
+      GlButton(if (allCollapsed) "Expand all files" else "Collapse all files", onClick = {
+        collapsedPaths = if (allCollapsed) emptyList() else diffs.data.indices.map { path(it) }
+        showingOptions = false
+      }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
+      GlButton("Refresh changes", onClick = { showingOptions = false; onRetry() }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
+      state.mergeRequest.data?.webUrl?.takeIf { it.isNotBlank() }?.let { url ->
+        GlButton("Open in GitLab", onClick = { showingOptions = false; onOpenInBrowser("$url/diffs") }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
       }
     }
   }

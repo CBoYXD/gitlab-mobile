@@ -1,7 +1,9 @@
 package com.cboyxd.gitlab.ui.components
 
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
@@ -165,7 +167,6 @@ fun diffStats(diffs: List<GitLabFileDiff>): DiffStats {
 
 /** Highlight the old and new side of each hunk together, retaining multiline syntax state. */
 fun prepareDiffLines(lines: List<DiffLine>, path: String, colors: GlColors): List<AnnotatedString> {
-  val language = languageForPath(path)
   val result = lines.map { AnnotatedString(it.text) }.toMutableList()
   if (lines.sumOf { it.text.length } < 60_000) {
     var start = 0
@@ -177,7 +178,7 @@ fun prepareDiffLines(lines: List<DiffLine>, path: String, colors: GlColors): Lis
         val indices = (start until end).filter {
           lines[it].kind != if (oldSide) DiffKind.Add else DiffKind.Remove
         }
-        val highlighted = highlight(indices.joinToString("\n") { lines[it].text }, language, colors).splitLines()
+        val highlighted = highlightForPath(indices.joinToString("\n") { lines[it].text }, path, colors).splitLines()
         indices.forEachIndexed { n, index -> result[index] = highlighted.getOrElse(n) { AnnotatedString(lines[index].text) } }
       }
       start = end
@@ -211,15 +212,17 @@ fun DiffLineRow(
   scrollState: ScrollState? = null, codeWidth: Dp = 0.dp,
 ) {
   val c = Gl.colors
+  val options = LocalDiffDisplayOptions.current
+  val numberColumns = if (!options.showLineNumbers) 0 else if (options.dualLineNumbers) 2 else 1
   if (line.kind == DiffKind.Hunk) {
     Text(
       text = line.text,
-      style = Gl.type.monoSmall,
+      style = Gl.type.mono.copy(fontSize = options.fontSize.sp),
       color = c.accent,
       modifier = modifier
         .fillMaxWidth()
         .background(c.diffHunkBg)
-        .padding(start = gutter * 2 + 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        .padding(start = gutter * numberColumns + 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
     )
     return
   }
@@ -242,13 +245,18 @@ fun DiffLineRow(
         }
       },
   ) {
-    for ((number, tone) in listOf(line.oldNo to c.danger, line.newNo to c.success)) {
+    val numbers = when {
+      !options.showLineNumbers -> emptyList()
+      options.dualLineNumbers -> listOf(line.oldNo, line.newNo)
+      else -> listOf(if (line.kind == DiffKind.Remove) line.oldNo else line.newNo)
+    }
+    for (number in numbers) {
       Text(
         text = number?.toString().orEmpty(),
-        style = Gl.type.monoSmall.copy(fontSize = 11.sp),
-        color = if (line.kind == DiffKind.Context) c.textTertiary else tone,
+        style = Gl.type.mono.copy(fontSize = (options.fontSize - 1).sp),
+        color = when (line.kind) { DiffKind.Add -> c.success; DiffKind.Remove -> c.danger; else -> c.textTertiary },
         maxLines = 1,
-        modifier = Modifier.width(gutter).padding(start = 2.dp, end = 6.dp, top = 3.dp),
+        modifier = Modifier.width(gutter).padding(start = 2.dp, end = 6.dp, top = 2.dp),
         textAlign = androidx.compose.ui.text.style.TextAlign.End,
       )
     }
@@ -261,14 +269,14 @@ fun DiffLineRow(
         DiffKind.Remove -> c.danger
         else -> c.textTertiary
       },
-      modifier = Modifier.padding(start = 6.dp, top = 3.dp),
+      modifier = Modifier.padding(start = 4.dp, top = 3.dp),
     )
     Text(
-      text = text ?: AnnotatedString(line.text),
-      style = Gl.type.mono.copy(fontSize = 12.sp, lineHeight = 18.sp, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)),
+      text = if (options.syntaxColors) text ?: AnnotatedString(line.text) else AnnotatedString(line.text),
+      style = Gl.type.mono.copy(fontSize = options.fontSize.sp, lineHeight = (options.fontSize * 1.5).sp, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)),
       color = c.textPrimary,
       softWrap = scrollState == null,
-      modifier = Modifier.weight(1f).padding(start = 4.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
+      modifier = Modifier.weight(1f).padding(start = 4.dp, end = 8.dp, top = 1.dp, bottom = 1.dp),
     )
   }
 }
@@ -284,6 +292,7 @@ fun DiffFileHeader(
   modifier: Modifier = Modifier,
 ) {
   val c = Gl.colors
+  val options = LocalDiffDisplayOptions.current
   val path = diff.newPath.ifEmpty { diff.oldPath }
   val name = path.substringAfterLast('/')
   val shown = if (diff.renamedFile && diff.oldPath != diff.newPath) "${diff.oldPath} → ${diff.newPath}" else path
@@ -304,17 +313,15 @@ fun DiffFileHeader(
       modifier = Modifier.size(20.dp),
     )
     Spacer(Modifier.width(6.dp))
-    FileTypeIcon(name = name, folder = false, size = 18.dp)
-    Spacer(Modifier.width(8.dp))
     Text(
       text = shown,
       style = Gl.type.mono,
       color = c.textPrimary,
-      maxLines = 3,
+      maxLines = 1,
       overflow = TextOverflow.Ellipsis,
-      modifier = Modifier.weight(1f).semantics { contentDescription = shown },
+      modifier = Modifier.weight(1f).then(if (options.scrollablePath) Modifier.horizontalScroll(rememberScrollState()) else Modifier).semantics { contentDescription = shown },
     )
-    Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 6.dp)) {
+    if (collapsed) Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 6.dp)) {
       when {
         diff.newFile -> GlBadge("New", tone = Tone.Success)
         diff.deletedFile -> GlBadge("Deleted", tone = Tone.Danger)
@@ -399,8 +406,10 @@ fun LazyListScope.diffFileItems(
         items(lines.size, key = { "file-$index-line-$it" }) { n ->
           val scroll = if (wrapLines) null else LocalDiffScrollStates.current.getOrPut(index) { ScrollState(0) }
           val screenWidth = LocalConfiguration.current.screenWidthDp.dp
-          val width = remember(lines, screenWidth, gutter) {
-            maxColumns.times(8).dp.plus(gutter * 2 + 36.dp).coerceAtLeast(screenWidth)
+          val options = LocalDiffDisplayOptions.current
+          val fontScale = LocalDensity.current.fontScale
+          val width = remember(lines, screenWidth, gutter, options, fontScale) {
+            (maxColumns * options.fontSize * 0.65f * fontScale).dp.plus(gutter * (if (!options.showLineNumbers) 0 else if (options.dualLineNumbers) 2 else 1) + 24.dp).coerceAtLeast(screenWidth)
           }
           DiffLineRow(lines[n], texts?.getOrNull(n), gutter, scrollState = scroll, codeWidth = width)
         }

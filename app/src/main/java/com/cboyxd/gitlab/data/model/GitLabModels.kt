@@ -391,8 +391,13 @@ data class GitLabContributor(
   val name: String = "",
   val commits: Int = 0,
   val additions: Int = 0,
-  val deletions: Int = 0
+  val deletions: Int = 0,
+  val email: String = "",
+  @Json(name = "avatar_url") val avatarUrl: String? = null,
 )
+
+@JsonClass(generateAdapter = true)
+data class GitLabAvatar(@Json(name = "avatar_url") val avatarUrl: String? = null)
 
 @JsonClass(generateAdapter = true)
 data class GitLabLabel(

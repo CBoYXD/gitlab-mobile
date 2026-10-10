@@ -1,5 +1,6 @@
 package com.cboyxd.gitlab.data.api
 
+import com.cboyxd.gitlab.data.model.GitLabAvatar
 import com.cboyxd.gitlab.data.model.GitLabApprovals
 import com.cboyxd.gitlab.data.model.GitLabBranch
 import com.cboyxd.gitlab.data.model.GitLabCommit
@@ -47,6 +48,9 @@ interface GitLabApiService {
 
   @GET("api/v4/user")
   suspend fun getCurrentUser(): Response<GitLabUser>
+
+  @GET("api/v4/avatar")
+  suspend fun getAvatar(@Query("email") email: String, @Query("size") size: Int = 64): Response<GitLabAvatar>
 
   @GET("api/v4/user/status")
   suspend fun getUserStatus(): Response<GitLabUserStatus>

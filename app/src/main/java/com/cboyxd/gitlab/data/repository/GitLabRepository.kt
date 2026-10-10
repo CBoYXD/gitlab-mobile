@@ -64,6 +64,29 @@ data class ConnectionProbe(
  * to-dos), which is what used to make screens hang on large servers.
  */
 class GitLabRepository {
+  private data class CachedAvatar(val url: String?, val expiresAt: Long)
+  private val avatarCache = java.util.concurrent.ConcurrentHashMap<String, CachedAvatar>()
+  private val avatarSlots = Semaphore(4)
+
+  private suspend fun contributorAvatar(instance: GitLabInstance, email: String): String? {
+    if (email.isBlank()) return null
+    val key = "${instance.id}:${instance.url}:$email"
+    avatarCache[key]?.takeIf { it.expiresAt > System.currentTimeMillis() }?.let { return it.url }
+    return avatarSlots.withPermit {
+      avatarCache[key]?.takeIf { it.expiresAt > System.currentTimeMillis() }?.let { return@withPermit it.url }
+      val url = try {
+        kotlinx.coroutines.withTimeoutOrNull(5_000) { service(instance).getAvatar(email).body()?.avatarUrl }
+      } catch (cancel: CancellationException) {
+        throw cancel
+      } catch (_: Exception) {
+        null
+      }
+      if (avatarCache.size >= 512) avatarCache.clear()
+      avatarCache[key] = CachedAvatar(url, System.currentTimeMillis() + if (url == null) 60_000 else 30 * 60_000)
+      url
+    }
+  }
+
 
   suspend fun testConnection(instance: GitLabInstance): Result<ConnectionProbe> = call {
     val service = service(instance)
@@ -549,7 +572,14 @@ class GitLabRepository {
     val response = service(instance).getContributors(projectId)
     // Contributor stats need repository access; public projects sometimes answer 403.
     if (response.code() == 403) return@call emptyList()
-    response.requireList()
+    val people = response.requireList()
+    kotlinx.coroutines.withTimeoutOrNull(5_000) {
+      coroutineScope {
+        people.map { person ->
+          async { person.copy(avatarUrl = person.avatarUrl ?: contributorAvatar(instance, person.email)) }
+        }.awaitAll()
+      }
+    } ?: people
   }
 
   suspend fun getLabels(instance: GitLabInstance, projectId: Long): Result<List<GitLabLabel>> = call {

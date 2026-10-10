@@ -444,8 +444,7 @@ private fun ContributorRow(person: GitLabContributor) {
       .padding(horizontal = GlSpace.margin, vertical = 10.dp),
     verticalAlignment = Alignment.CenterVertically,
   ) {
-    // Contributor stats come without avatars; emails are deliberately not shown.
-    Avatar(url = null, name = person.name, size = 36.dp)
+    Avatar(url = person.avatarUrl, name = person.name, size = 36.dp)
     Spacer(Modifier.width(16.dp))
     Column(modifier = Modifier.weight(1f)) {
       Text(person.name.ifBlank { "Unknown" }, style = Gl.type.rowTitle, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)

@@ -157,12 +157,13 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
     viewModel.navigateTo(ScreenDestination.Instances)
   }
 
-  val imageAuth = remember(uiState.activeInstance?.url, uiState.activeInstance?.token) {
-    uiState.activeInstance?.takeIf { it.token.isNotBlank() }?.let { instance ->
-      val host = runCatching { Uri.parse(normalizeBaseUrl(instance.url)).host }.getOrNull()
-      host?.let {
-        if (instance.authKind == GitLabAuth.KIND_OAUTH) ImageAuth(it, "Authorization", "Bearer ${instance.token}")
-        else ImageAuth(it, "PRIVATE-TOKEN", instance.token)
+  val imageAuth = remember(uiState.activeInstance) {
+    uiState.activeInstance?.let { instance ->
+      val baseUrl = normalizeBaseUrl(instance.url)
+      if (instance.authKind == GitLabAuth.KIND_OAUTH) {
+        ImageAuth(baseUrl, instance.id, "Authorization", "Bearer ${instance.token}")
+      } else {
+        ImageAuth(baseUrl, instance.id, "PRIVATE-TOKEN", instance.token)
       }
     }
   }

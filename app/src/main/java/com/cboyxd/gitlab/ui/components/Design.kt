@@ -53,7 +53,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.heading
@@ -63,12 +62,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import android.net.Uri
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
-import coil.compose.AsyncImage
 import coil.request.ImageRequest
+import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
 import com.cboyxd.gitlab.ui.theme.Gl
 import com.cboyxd.gitlab.ui.theme.GlMotion
 import com.cboyxd.gitlab.ui.theme.GlRadius
@@ -653,9 +651,9 @@ fun FullScreenState(content: @Composable () -> Unit) {
 
 /**
  * Credentials for images served by the active GitLab server. Private projects and groups only
- * return their avatars to authenticated requests, so same-host image loads carry the token.
+ * return their avatars to authenticated requests, so same-origin image loads carry the token.
  */
-data class ImageAuth(val host: String, val headerName: String, val headerValue: String)
+data class ImageAuth(val baseUrl: String, val accountId: String, val headerName: String, val headerValue: String)
 
 val LocalImageAuth = staticCompositionLocalOf<ImageAuth?> { null }
 
@@ -665,10 +663,15 @@ fun rememberImageModel(url: String?): Any? {
   val context = LocalContext.current
   return remember(url, auth) {
     if (url.isNullOrBlank()) return@remember null
-    val host = runCatching { Uri.parse(url).host }.getOrNull()
-    val builder = ImageRequest.Builder(context).data(url).crossfade(true)
-    if (auth != null && host != null && host.equals(auth.host, ignoreCase = true)) {
-      builder.addHeader(auth.headerName, auth.headerValue)
+    val origin = auth?.baseUrl?.toHttpUrlOrNull()
+    val resolved = url.toHttpUrlOrNull() ?: origin?.resolve(url)
+    if (resolved == null) return@remember null
+    val builder = ImageRequest.Builder(context).data(resolved.toString()).crossfade(180)
+    if (auth != null && origin != null && resolved.scheme == origin.scheme &&
+      resolved.host == origin.host && resolved.port == origin.port) {
+      if (auth.headerValue.isNotBlank() && auth.headerValue != "Bearer ") builder.addHeader(auth.headerName, auth.headerValue)
+      val cacheKey = "account:${auth.accountId}:$resolved"
+      builder.memoryCacheKey(cacheKey).diskCacheKey(cacheKey)
     }
     builder.build()
   }
@@ -693,12 +696,7 @@ fun Avatar(url: String?, name: String, size: Dp, modifier: Modifier = Modifier) 
     val initial = name.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "?"
     Text(initial, style = Gl.type.label, color = c.textSecondary)
     if (!url.isNullOrBlank()) {
-      AsyncImage(
-        model = rememberImageModel(url),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.matchParentSize(),
-      )
+      AvatarImage(url = url, modifier = Modifier.matchParentSize())
     }
   }
 }

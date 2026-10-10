@@ -1,5 +1,9 @@
 package com.cboyxd.gitlab.ui.components
 
+import androidx.compose.foundation.ScrollState
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -82,17 +86,20 @@ fun parseUnifiedDiff(diff: String): List<DiffLine> {
   val out = ArrayList<DiffLine>()
   var oldNo = 0
   var newNo = 0
-  val raw = diff.lines().let { if (it.lastOrNull()?.isEmpty() == true) it.dropLast(1) else it }
+  var inHunk = false
+  val raw = diff.replace("\t", "    ").lines().let { if (it.lastOrNull()?.isEmpty() == true) it.dropLast(1) else it }
   for (line in raw) {
     when {
       line.startsWith("@@") -> {
+        inHunk = true
         HUNK.matchEntire(line)?.let { m ->
           oldNo = m.groupValues[1].toInt()
           newNo = m.groupValues[2].toInt()
         }
         out += DiffLine(DiffKind.Hunk, null, null, line)
       }
-      line.startsWith("+++") || line.startsWith("---") || line.startsWith("\\") -> Unit
+      line.startsWith("\\") -> out += DiffLine(DiffKind.Hunk, null, null, line.removePrefix("\\ "))
+      !inHunk -> Unit
       line.startsWith("+") -> out += DiffLine(DiffKind.Add, null, newNo++, line.drop(1))
       line.startsWith("-") -> out += DiffLine(DiffKind.Remove, oldNo++, null, line.drop(1))
       else -> out += DiffLine(DiffKind.Context, oldNo++, newNo++, line.removePrefix(" "))
@@ -144,24 +151,40 @@ fun diffStats(diffs: List<GitLabFileDiff>): DiffStats {
   var added = 0
   var removed = 0
   diffs.forEach { d ->
+    var inHunk = false
     d.diff.lineSequence().forEach { line ->
       when {
-        line.startsWith("+++") || line.startsWith("---") -> Unit
-        line.startsWith("+") -> added++
-        line.startsWith("-") -> removed++
+        line.startsWith("@@") -> inHunk = true
+        inHunk && line.startsWith("+") -> added++
+        inHunk && line.startsWith("-") -> removed++
       }
     }
   }
   return DiffStats(added, removed)
 }
 
-/** Lines ready to draw: syntax colors plus the in-line change background. Blocking. */
+/** Highlight the old and new side of each hunk together, retaining multiline syntax state. */
 fun prepareDiffLines(lines: List<DiffLine>, path: String, colors: GlColors): List<AnnotatedString> {
   val language = languageForPath(path)
-  val highlightable = lines.sumOf { it.text.length } < 60_000
-  return lines.map { line ->
-    if (line.kind == DiffKind.Hunk) return@map AnnotatedString(line.text)
-    val base = if (highlightable) highlight(line.text, language, colors) else AnnotatedString(line.text)
+  val result = lines.map { AnnotatedString(it.text) }.toMutableList()
+  if (lines.sumOf { it.text.length } < 60_000) {
+    var start = 0
+    while (start < lines.size) {
+      if (lines[start].kind == DiffKind.Hunk) { start++; continue }
+      var end = start
+      while (end < lines.size && lines[end].kind != DiffKind.Hunk) end++
+      for (oldSide in listOf(true, false)) {
+        val indices = (start until end).filter {
+          lines[it].kind != if (oldSide) DiffKind.Add else DiffKind.Remove
+        }
+        val highlighted = highlight(indices.joinToString("\n") { lines[it].text }, language, colors).splitLines()
+        indices.forEachIndexed { n, index -> result[index] = highlighted.getOrElse(n) { AnnotatedString(lines[index].text) } }
+      }
+      start = end
+    }
+  }
+  return lines.mapIndexed { index, line ->
+    val base = result[index]
     val range = line.changed
     if (range == null || range.isEmpty()) base
     else buildAnnotatedString {
@@ -180,11 +203,13 @@ fun prepareDiffLines(lines: List<DiffLine>, path: String, colors: GlColors): Lis
 fun diffGutterWidth(maxLine: Int): Dp = (maxLine.toString().length.coerceAtLeast(2) * 8 + 16).dp
 
 /**
- * A diff line in the GitHub Mobile manner: a number gutter (new line number, or the old one for
- * removals), a hairline, then the soft-wrapped code on a red or green wash.
+ * Unified diff with old/new line numbers, syntax colors and an optional shared horizontal scroll.
  */
 @Composable
-fun DiffLineRow(line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Modifier = Modifier) {
+fun DiffLineRow(
+  line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Modifier = Modifier,
+  scrollState: ScrollState? = null, codeWidth: Dp = 0.dp,
+) {
   val c = Gl.colors
   if (line.kind == DiffKind.Hunk) {
     Text(
@@ -194,7 +219,7 @@ fun DiffLineRow(line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Mo
       modifier = modifier
         .fillMaxWidth()
         .background(c.diffHunkBg)
-        .padding(start = gutter + 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
+        .padding(start = gutter * 2 + 8.dp, end = 12.dp, top = 8.dp, bottom = 8.dp),
     )
     return
   }
@@ -203,10 +228,10 @@ fun DiffLineRow(line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Mo
     DiffKind.Remove -> c.diffRemoveBg to "−"
     else -> Color.Transparent to " "
   }
-  val number = if (line.kind == DiffKind.Remove) line.oldNo else line.newNo
   Row(
     modifier = modifier
       .fillMaxWidth()
+      .then(if (scrollState != null) Modifier.horizontalScroll(scrollState).width(codeWidth) else Modifier)
       .height(IntrinsicSize.Min)
       .background(bg)
       .semantics(mergeDescendants = true) {
@@ -217,14 +242,16 @@ fun DiffLineRow(line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Mo
         }
       },
   ) {
-    Text(
-      text = if (line.kind == DiffKind.Remove) "" else number?.toString().orEmpty(),
-      style = Gl.type.monoSmall,
-      color = if (line.kind == DiffKind.Add) c.success else c.textTertiary,
-      maxLines = 1,
-      modifier = Modifier.width(gutter).padding(start = 4.dp, end = 8.dp, top = 3.dp),
-      textAlign = androidx.compose.ui.text.style.TextAlign.End,
-    )
+    for ((number, tone) in listOf(line.oldNo to c.danger, line.newNo to c.success)) {
+      Text(
+        text = number?.toString().orEmpty(),
+        style = Gl.type.monoSmall.copy(fontSize = 11.sp),
+        color = if (line.kind == DiffKind.Context) c.textTertiary else tone,
+        maxLines = 1,
+        modifier = Modifier.width(gutter).padding(start = 2.dp, end = 6.dp, top = 3.dp),
+        textAlign = androidx.compose.ui.text.style.TextAlign.End,
+      )
+    }
     Box(Modifier.width(1.dp).fillMaxHeight().background(c.border))
     Text(
       text = marker,
@@ -238,8 +265,9 @@ fun DiffLineRow(line: DiffLine, text: AnnotatedString?, gutter: Dp, modifier: Mo
     )
     Text(
       text = text ?: AnnotatedString(line.text),
-      style = Gl.type.mono.copy(lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)),
+      style = Gl.type.mono.copy(fontSize = 12.sp, lineHeight = 18.sp, lineHeightStyle = LineHeightStyle(LineHeightStyle.Alignment.Center, LineHeightStyle.Trim.None)),
       color = c.textPrimary,
+      softWrap = scrollState == null,
       modifier = Modifier.weight(1f).padding(start = 4.dp, end = 12.dp, top = 2.dp, bottom = 2.dp),
     )
   }
@@ -279,17 +307,25 @@ fun DiffFileHeader(
     FileTypeIcon(name = name, folder = false, size = 18.dp)
     Spacer(Modifier.width(8.dp))
     Text(
-      text = ellipsizeStart(shown, 44),
+      text = shown,
       style = Gl.type.mono,
       color = c.textPrimary,
-      maxLines = 1,
+      maxLines = 3,
       overflow = TextOverflow.Ellipsis,
       modifier = Modifier.weight(1f).semantics { contentDescription = shown },
     )
-    when {
-      diff.newFile -> GlBadge("New", tone = Tone.Success)
-      diff.deletedFile -> GlBadge("Deleted", tone = Tone.Danger)
-      diff.renamedFile -> GlBadge("Renamed", tone = Tone.Info)
+    Column(horizontalAlignment = Alignment.End, modifier = Modifier.padding(start = 6.dp)) {
+      when {
+        diff.newFile -> GlBadge("New", tone = Tone.Success)
+        diff.deletedFile -> GlBadge("Deleted", tone = Tone.Danger)
+        diff.renamedFile -> GlBadge("Renamed", tone = Tone.Info)
+        diff.generatedFile -> GlBadge("Generated")
+      }
+      val stats = remember(diff) { diffStats(listOf(diff)) }
+      Row(horizontalArrangement = androidx.compose.foundation.layout.Arrangement.spacedBy(4.dp)) {
+        Text("+${stats.added}", style = Gl.type.monoSmall, color = c.success)
+        Text("−${stats.removed}", style = Gl.type.monoSmall, color = c.danger)
+      }
     }
     if (onToggleViewed != null) {
       IconButton(onClick = onToggleViewed) {
@@ -322,8 +358,11 @@ fun LazyListScope.diffFileItems(
   viewed: Set<Int>,
   onToggleCollapsed: (Int) -> Unit,
   onToggleViewed: ((Int) -> Unit)?,
+  wrapLines: Boolean = true,
+  selectedFile: Int? = null,
 ) {
   diffs.forEachIndexed { index, diff ->
+    if (selectedFile != null && selectedFile != index) return@forEachIndexed
     stickyHeader(key = "file-$index") {
       Column {
         DiffFileHeader(
@@ -341,7 +380,12 @@ fun LazyListScope.diffFileItems(
     when {
       diff.diff.isBlank() -> item(key = "file-$index-empty") {
         Text(
-          "No text changes (binary or too large to show)",
+          when {
+            diff.tooLarge -> "GitLab excluded this diff because it is too large. View the file in GitLab."
+            diff.collapsed -> "GitLab omitted this diff. Open it in GitLab to load the changes."
+            diff.renamedFile -> "File renamed without text changes."
+            else -> "No text diff available (binary file or metadata-only change)."
+          },
           style = Gl.type.meta,
           color = Gl.colors.textSecondary,
           modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
@@ -349,10 +393,16 @@ fun LazyListScope.diffFileItems(
       }
       lines == null -> item(key = "file-$index-loading") { LoadingState(label = "Loading changes") }
       else -> {
-        val gutter = diffGutterWidth(lines.maxOf { maxOf(it.oldNo ?: 0, it.newNo ?: 0) })
+        val gutter = diffGutterWidth(lines.maxOfOrNull { maxOf(it.oldNo ?: 0, it.newNo ?: 0) } ?: 0)
         val texts = prepared[index]
+        val maxColumns = (lines.maxOfOrNull { it.text.length } ?: 0).coerceAtMost(10_000)
         items(lines.size, key = { "file-$index-line-$it" }) { n ->
-          DiffLineRow(lines[n], texts?.getOrNull(n), gutter)
+          val scroll = if (wrapLines) null else LocalDiffScrollStates.current.getOrPut(index) { ScrollState(0) }
+          val screenWidth = LocalConfiguration.current.screenWidthDp.dp
+          val width = remember(lines, screenWidth, gutter) {
+            maxColumns.times(8).dp.plus(gutter * 2 + 36.dp).coerceAtLeast(screenWidth)
+          }
+          DiffLineRow(lines[n], texts?.getOrNull(n), gutter, scrollState = scroll, codeWidth = width)
         }
       }
     }
@@ -386,6 +436,8 @@ fun rememberPreparedDiffs(diffs: List<GitLabFileDiff>): PreparedDiffs {
   }
   return holder
 }
+
+val LocalDiffScrollStates = androidx.compose.runtime.compositionLocalOf { mutableMapOf<Int, ScrollState>() }
 
 private const val DIFF_PREVIEW_LINES = 120
 

@@ -467,7 +467,10 @@ data class GitLabFileDiff(
   val diff: String = "",
   @Json(name = "new_file") val newFile: Boolean = false,
   @Json(name = "renamed_file") val renamedFile: Boolean = false,
-  @Json(name = "deleted_file") val deletedFile: Boolean = false
+  @Json(name = "deleted_file") val deletedFile: Boolean = false,
+  val collapsed: Boolean = false,
+  @Json(name = "too_large") val tooLarge: Boolean = false,
+  @Json(name = "generated_file") val generatedFile: Boolean = false
 )
 
 @JsonClass(generateAdapter = true)

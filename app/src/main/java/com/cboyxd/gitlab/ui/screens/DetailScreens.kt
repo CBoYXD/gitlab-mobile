@@ -1,6 +1,17 @@
 package com.cboyxd.gitlab.ui.screens
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.text.selection.SelectionContainer
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.window.Dialog
+import androidx.compose.material3.Surface
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Switch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.foundation.ScrollState
+import com.cboyxd.gitlab.ui.components.LocalDiffScrollStates
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -35,6 +46,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.outlined.ArrowForward
+import androidx.compose.material.icons.outlined.OpenInNew
 import androidx.compose.material.icons.outlined.AccountTree
 import androidx.compose.material.icons.outlined.CallMerge
 import androidx.compose.material.icons.outlined.ChatBubbleOutline
@@ -419,7 +431,7 @@ fun MergeRequestDetailScreen(
       onBack = onBack,
       modifier = modifier,
     )
-    MrPage.FILES -> FilesChangedPage(state, reference, onRetry, onBack = { page = MrPage.OVERVIEW }, modifier = modifier)
+    MrPage.FILES -> FilesChangedPage(state, reference, onRetry, onOpenInBrowser = onOpenInBrowser, onBack = { page = MrPage.OVERVIEW }, modifier = modifier)
     MrPage.COMMITS -> SubPage(title = "Commits", overline = reference, onBack = { page = MrPage.OVERVIEW }, modifier = modifier) {
       loadableList(
         feed = state.commits,
@@ -570,6 +582,13 @@ private fun MergeRequestOverview(
           if (state.mergeRequest.error != null) {
             item(key = "mr-error") {
               InlineError(state.mergeRequest.error, Modifier.padding(horizontal = GlSpace.margin, vertical = 4.dp), onRetry = onRetry)
+            }
+          }
+          item(key = "review-navigation") {
+            Row(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState()).padding(horizontal = GlSpace.margin, vertical = 8.dp), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+              GlButton("Changes${if (state.diffs.loaded) " (${state.diffs.data.size})" else ""}", onClick = { onOpenPage(MrPage.FILES) }, kind = GlButtonKind.Secondary, icon = Icons.Outlined.Difference)
+              GlButton("Commits", onClick = { onOpenPage(MrPage.COMMITS) }, kind = GlButtonKind.Ghost)
+              GlButton("Pipelines", onClick = { onOpenPage(MrPage.PIPELINES) }, kind = GlButtonKind.Ghost)
             }
           }
           item(key = "post") {
@@ -873,45 +892,122 @@ private fun MergeButton(label: String, onClick: () -> Unit) {
 
 /** Every changed file with sticky headers, a gutter and red/green lines. */
 @Composable
-private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, onRetry: () -> Unit, onBack: () -> Unit, modifier: Modifier) {
+private fun FilesChangedPage(state: MergeRequestDetailState, reference: String, onRetry: () -> Unit, onOpenInBrowser: (String) -> Unit, onBack: () -> Unit, modifier: Modifier) {
   val c = Gl.colors
   val diffs = state.diffs
   val stats = remember(diffs.data) { diffStats(diffs.data) }
   val prepared = rememberPreparedDiffs(diffs.data)
-  var collapsed by remember(diffs.data) { mutableStateOf(emptySet<Int>()) }
-  var viewed by remember(diffs.data) { mutableStateOf(emptySet<Int>()) }
+  var collapsedPaths by rememberSaveable(state.projectId, state.iid) { mutableStateOf(emptyList<String>()) }
+  var viewedPaths by rememberSaveable(state.projectId, state.iid) { mutableStateOf(emptyList<String>()) }
+  var selectedPath by rememberSaveable(state.projectId, state.iid) { mutableStateOf<String?>(null) }
+  var wrapLines by rememberSaveable { mutableStateOf(true) }
+  var pickingFile by remember { mutableStateOf(false) }
+  val scrollStates = remember(diffs.data) { mutableMapOf<Int, ScrollState>() }
+  val listState = rememberLazyListState()
+  val scope = rememberCoroutineScope()
+  fun path(index: Int) = diffs.data[index].newPath.ifBlank { diffs.data[index].oldPath }
+  val collapsed = diffs.data.indices.filter { path(it) in collapsedPaths }.toSet()
+  val viewed = diffs.data.indices.filter { path(it) in viewedPaths }.toSet()
+  val selectedFile = diffs.data.indices.firstOrNull { path(it) == selectedPath }
   Column(modifier = modifier.fillMaxSize().background(c.bg)) {
     GlTopBar(
-      title = "Files changed",
-      subtitle = if (diffs.loaded) "+${grouped(stats.added)} −${grouped(stats.removed)} · ${plural(diffs.data.size, "file", "files")}" else reference,
+      title = "Changes",
+      overline = reference,
+      subtitle = if (diffs.loaded) "+${grouped(stats.added)} −${grouped(stats.removed)} · ${plural(diffs.data.size, "file", "files")}" else null,
       onBack = onBack,
-    )
+    ) {
+      state.mergeRequest.data?.webUrl?.takeIf { it.isNotBlank() }?.let { url ->
+        com.cboyxd.gitlab.ui.components.GlIconAction(Icons.Outlined.OpenInNew, "Open changes in GitLab", onClick = { onOpenInBrowser("$url/diffs") })
+      }
+    }
     GlDivider()
+    if (diffs.data.isNotEmpty()) {
+      Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        GlButton(
+          selectedPath?.substringAfterLast('/') ?: "All files",
+          onClick = { pickingFile = true }, kind = GlButtonKind.Ghost,
+          icon = Icons.Outlined.KeyboardArrowDown, modifier = Modifier.weight(1f),
+        )
+        Text("Wrap", style = Gl.type.meta, color = c.textSecondary)
+        Switch(checked = wrapLines, onCheckedChange = { wrapLines = it })
+      }
+      Row(Modifier.fillMaxWidth().padding(horizontal = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text("${viewed.size}/${diffs.data.size} viewed", style = Gl.type.meta, color = c.textSecondary, modifier = Modifier.weight(1f))
+        val allCollapsed = collapsed.size == diffs.data.size
+        GlButton(if (allCollapsed) "Expand all" else "Collapse all", onClick = {
+          collapsedPaths = if (allCollapsed) emptyList() else diffs.data.indices.map { path(it) }
+        }, kind = GlButtonKind.Ghost)
+      }
+      GlDivider()
+    }
     val error = diffs.error
     when {
       diffs.initialLoading -> FullScreenState { LoadingState(label = "Loading changes") }
       error != null && diffs.data.isEmpty() -> FullScreenState { ErrorState(error, onRetry) }
-      diffs.data.isEmpty() -> FullScreenState { EmptyState(Icons.Outlined.Difference, "No changes", "This merge request doesn't change any files.") }
-      else -> LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = GlSpace.group)) {
-        diffFileItems(
-          diffs = diffs.data,
-          parsed = prepared.parsed,
-          prepared = prepared.texts,
-          collapsed = collapsed,
-          viewed = viewed,
-          onToggleCollapsed = { i -> collapsed = if (i in collapsed) collapsed - i else collapsed + i },
-          onToggleViewed = { i ->
-            // A file marked viewed folds away, as on GitHub; unmarking opens it again.
-            if (i in viewed) {
-              viewed = viewed - i
-              collapsed = collapsed - i
-            } else {
-              viewed = viewed + i
-              collapsed = collapsed + i
+      diffs.data.isEmpty() -> FullScreenState {
+        EmptyState(Icons.Outlined.Difference, "No changes available", "GitLab may still be preparing the changes for a new merge request. Refresh to check again.", actionLabel = "Refresh", onAction = onRetry)
+      }
+      else -> CompositionLocalProvider(LocalDiffScrollStates provides scrollStates) {
+        SelectionContainer(Modifier.weight(1f)) {
+          LazyColumn(state = listState, modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = GlSpace.group)) {
+            if (error != null) item(key = "diff-error") { InlineError(error, onRetry = onRetry, modifier = Modifier.padding(16.dp)) }
+            diffFileItems(
+              diffs = diffs.data,
+              parsed = prepared.parsed,
+              prepared = prepared.texts,
+              collapsed = collapsed,
+              viewed = viewed,
+              wrapLines = wrapLines,
+              selectedFile = selectedFile,
+              onToggleCollapsed = { i -> val key = path(i); collapsedPaths = if (key in collapsedPaths) collapsedPaths - key else collapsedPaths + key },
+              onToggleViewed = { i ->
+                val key = path(i)
+                if (key in viewedPaths) {
+                  viewedPaths = viewedPaths - key
+                  collapsedPaths = collapsedPaths - key
+                } else {
+                  viewedPaths = viewedPaths + key
+                  collapsedPaths = if (key in collapsedPaths) collapsedPaths else collapsedPaths + key
+                }
+              },
+            )
+            item(key = "bottom") { Spacer(Modifier.navigationBarsPadding()) }
+          }
+        }
+      }
+    }
+  }
+  if (pickingFile) {
+    var query by rememberSaveable { mutableStateOf("") }
+    Dialog(onDismissRequest = { pickingFile = false }) {
+      Surface(shape = MaterialTheme.shapes.large, color = c.surface) {
+        Column(Modifier.fillMaxWidth().heightIn(max = 560.dp).padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          Text("Changed files", style = Gl.type.title, color = c.textPrimary)
+          OutlinedTextField(query, onValueChange = { query = it }, label = { Text("Search files") }, singleLine = true, modifier = Modifier.fillMaxWidth())
+          GlButton("All ${diffs.data.size} files", onClick = {
+            selectedPath = null
+            pickingFile = false
+            scope.launch { listState.scrollToItem(0) }
+          }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
+          val matching = diffs.data.indices.filter { path(it).contains(query, ignoreCase = true) }
+          LazyColumn(Modifier.weight(1f, fill = false)) {
+            if (matching.isEmpty()) item { Text("No matching files", style = Gl.type.meta, color = c.textSecondary) }
+            items(matching, key = { it }) { index ->
+              Column(Modifier.fillMaxWidth().clickable {
+                selectedPath = path(index)
+                collapsedPaths = collapsedPaths - path(index)
+                pickingFile = false
+                scope.launch { listState.scrollToItem(0) }
+              }.padding(vertical = 12.dp)) {
+                Text(path(index), style = Gl.type.mono, color = c.textPrimary)
+                val fileStats = remember(diffs.data[index]) { diffStats(listOf(diffs.data[index])) }
+                DiffCounts(fileStats.added, fileStats.removed)
+              }
+              GlDivider()
             }
-          },
-        )
-        item(key = "bottom") { Spacer(Modifier.navigationBarsPadding()) }
+          }
+          GlButton("Cancel", onClick = { pickingFile = false }, kind = GlButtonKind.Ghost, modifier = Modifier.fillMaxWidth())
+        }
       }
     }
   }

@@ -6,6 +6,10 @@ import android.content.Intent
 import android.net.Uri
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.SizeTransform
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
@@ -43,6 +47,11 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.material3.Surface
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.Alignment
+import kotlinx.coroutines.delay
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
@@ -73,6 +82,7 @@ import com.cboyxd.gitlab.ui.components.GlDivider
 import com.cboyxd.gitlab.ui.components.GlRow
 import com.cboyxd.gitlab.ui.components.GlSectionHeader
 import com.cboyxd.gitlab.ui.screens.FileViewerScreen
+import com.cboyxd.gitlab.ui.viewmodel.GitLabUiState
 import com.cboyxd.gitlab.ui.viewmodel.ProjectSection
 import com.cboyxd.gitlab.data.model.GitLabLabel
 import com.cboyxd.gitlab.ui.components.MarkdownContext
@@ -114,6 +124,14 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
   var showSwitcher by rememberSaveable { mutableStateOf(false) }
   var openAddServer by rememberSaveable { mutableStateOf(false) }
   val c = Gl.colors
+  var showOpening by remember { mutableStateOf(false) }
+  LaunchedEffect(uiState.pendingDestination) {
+    showOpening = false
+    if (uiState.pendingDestination != null) {
+      delay(400)
+      showOpening = true
+    }
+  }
 
   LaunchedEffect(viewModel) {
     launch { viewModel.externalLinks.collect { openUrl(context, it) } }
@@ -128,7 +146,7 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
     }
   }
 
-  BackHandler(enabled = uiState.destination !is ScreenDestination.MainTabs || uiState.currentTab != BottomTab.HOME) {
+  BackHandler(enabled = uiState.pendingDestination != null || uiState.destination !is ScreenDestination.MainTabs || uiState.currentTab != BottomTab.HOME) {
     if (!viewModel.navigateBack()) {
       if (uiState.currentTab != BottomTab.HOME) viewModel.switchTab(BottomTab.HOME) else onExit()
     }
@@ -214,14 +232,34 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
         }
         else -> {
           val reduced = Gl.reducedMotion
+          // Keep the visible screen stable while another destination prepares its data.
+          val presented = remember { arrayOf(uiState) }
+          if (uiState.pendingDestination == null) presented[0] = uiState
           AnimatedContent(
-            targetState = uiState.destination to uiState.currentTab,
-            transitionSpec = { fadeIn(glTween(GlMotion.MEDIUM, reduced)) togetherWith fadeOut(glTween(GlMotion.FAST, reduced, GlMotion.EaseOut)) },
+            targetState = presented[0],
+            contentKey = { it.destination to it.currentTab },
+            modifier = Modifier.fillMaxSize(),
+            transitionSpec = {
+              if (reduced) {
+                fadeIn(glTween(GlMotion.MEDIUM, true)) togetherWith fadeOut(glTween(GlMotion.MEDIUM, true))
+              } else {
+                val direction = when {
+                  targetState.backStack.size > initialState.backStack.size -> 1
+                  targetState.backStack.size < initialState.backStack.size -> -1
+                  else -> if (targetState.currentTab.ordinal >= initialState.currentTab.ordinal) 1 else -1
+                }
+                ((slideInHorizontally(tween(340, easing = GlMotion.Standard)) { direction * it / 7 } +
+                  fadeIn(tween(280, delayMillis = 50))) togetherWith
+                  (slideOutHorizontally(tween(340, easing = GlMotion.Standard)) { -direction * it / 12 } +
+                    fadeOut(tween(240)))).using(SizeTransform(clip = false))
+              }
+            },
             label = "screen",
-          ) { (destination, tab) ->
+          ) { scene ->
             Destination(
-              destination = destination,
-              tab = tab,
+              uiState = scene,
+              destination = scene.destination,
+              tab = scene.currentTab,
               viewModel = viewModel,
               context = context,
               openSwitcher = { showSwitcher = true },
@@ -229,6 +267,18 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
               openAddServer = openAddServer,
               onAddServerConsumed = { openAddServer = false },
             )
+          }
+        }
+      }
+      if (showOpening && uiState.pendingDestination != null) {
+        Surface(
+          modifier = Modifier.align(Alignment.BottomCenter).padding(16.dp),
+          shape = RoundedCornerShape(16.dp),
+          color = c.surface,
+          tonalElevation = 4.dp,
+        ) {
+          TextButton(onClick = { viewModel.navigateBack() }) {
+            Text("Opening…  ·  Cancel", style = Gl.type.meta, color = c.textSecondary)
           }
         }
       }
@@ -270,6 +320,7 @@ private fun androidx.compose.foundation.layout.RowScope.TabItem(
 
 @Composable
 private fun Destination(
+  uiState: GitLabUiState,
   destination: ScreenDestination,
   tab: BottomTab,
   viewModel: GitLabViewModel,
@@ -279,7 +330,6 @@ private fun Destination(
   openAddServer: Boolean,
   onAddServerConsumed: () -> Unit,
 ) {
-  val uiState by viewModel.uiState.collectAsStateWithLifecycle()
   val back: () -> Unit = { viewModel.navigateBack() }
   val browser: (String) -> Unit = { openUrl(context, it) }
   val onLink: (String) -> Boolean = viewModel.explore::handleLink

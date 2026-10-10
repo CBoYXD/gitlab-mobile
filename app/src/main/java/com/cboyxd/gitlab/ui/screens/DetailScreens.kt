@@ -1170,11 +1170,7 @@ private fun BusyDot() {
 
 @Composable
 private fun SmallSpinner() {
-  androidx.compose.material3.CircularProgressIndicator(
-    modifier = Modifier.size(16.dp).semantics { contentDescription = "Loading" },
-    strokeWidth = 2.dp,
-    color = Gl.colors.textTertiary,
-  )
+  com.cboyxd.gitlab.ui.components.LoadingPlaceholder()
 }
 
 @Composable

@@ -46,7 +46,7 @@ import androidx.compose.material.icons.outlined.PlayCircleOutline
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.CircularProgressIndicator
+import com.cboyxd.gitlab.ui.components.LoadingPlaceholder
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -323,11 +323,7 @@ private fun <T> WorkRow(
     trailing = when {
       feed.loading && !feed.loaded -> {
         {
-          CircularProgressIndicator(
-            modifier = Modifier.size(16.dp).semantics { contentDescription = "Loading" },
-            strokeWidth = 2.dp,
-            color = Gl.colors.textTertiary,
-          )
+          LoadingPlaceholder()
         }
       }
       feed.error != null && feed.data.isEmpty() -> {

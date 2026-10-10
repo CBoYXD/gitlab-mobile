@@ -49,7 +49,7 @@ import androidx.compose.material.icons.outlined.Share
 import androidx.compose.material.icons.outlined.Shield
 import androidx.compose.material.icons.outlined.Star
 import androidx.compose.material.icons.outlined.StarOutline
-import androidx.compose.material3.CircularProgressIndicator
+import com.cboyxd.gitlab.ui.components.LoadingPlaceholder
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -572,7 +572,7 @@ private fun NavRow(icon: ImageVector, tile: Color, title: String, count: String?
     trailing = when {
       count != null -> { { Text(count, style = Gl.type.body.copy(fontFeatureSettings = "tnum"), color = Gl.colors.textSecondary) } }
       // A quiet placeholder so the count doesn't pop in beside an empty row.
-      loading -> { { CircularProgressIndicator(Modifier.size(14.dp).semantics { contentDescription = "Loading count" }, strokeWidth = 1.5.dp, color = Gl.colors.textTertiary) } }
+      loading -> { { LoadingPlaceholder() } }
       else -> null
     },
     onClick = onClick,

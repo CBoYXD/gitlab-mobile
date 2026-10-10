@@ -31,6 +31,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -70,6 +71,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   private var dashboardJob: Job? = null
   private var searchJob: Job? = null
   private var issueJob: Job? = null
+  private var navigationJob: Job? = null
 
   private val host = object : SessionHost {
     override val repository: GitLabRepository get() = this@GitLabViewModel.repository
@@ -116,6 +118,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   private fun resetSession() {
     session.cancel()
     session = newSession()
+    navigationJob = null
     dashboardJob = null
     searchJob = null
     issueJob = null
@@ -152,22 +155,71 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   // -------------------------------------------------------------------------------------------
 
   fun switchTab(tab: BottomTab) {
-    _uiState.update { it.copy(currentTab = tab, backStack = emptyList()) }
+    navigationJob?.cancel()
+    _uiState.update { it.copy(currentTab = tab, backStack = emptyList(), pendingDestination = null) }
+    ci.onDestinationChanged(ScreenDestination.MainTabs)
   }
 
   fun navigateTo(destination: ScreenDestination) {
+    navigationJob?.cancel()
     if (destination == ScreenDestination.MainTabs) {
-      _uiState.update { it.copy(backStack = emptyList()) }
+      _uiState.update { it.copy(backStack = emptyList(), pendingDestination = null) }
+      ci.onDestinationChanged(destination)
       return
     }
-    if (_uiState.value.destination == destination) return
-    _uiState.update { it.copy(backStack = it.backStack + destination) }
+    if (_uiState.value.destination == destination) {
+      _uiState.update { it.copy(pendingDestination = null) }
+      return
+    }
+    _uiState.update { it.copy(pendingDestination = destination) }
     ci.onDestinationChanged(destination)
     load(destination, force = true)
+    navigationJob = session.launch {
+      _uiState.first { readyToOpen(it, destination) }
+      _uiState.update {
+        if (it.pendingDestination == destination) it.copy(backStack = it.backStack + destination, pendingDestination = null) else it
+      }
+    }
+  }
+
+  private fun readyToOpen(s: GitLabUiState, d: ScreenDestination): Boolean {
+    fun ready(vararg values: Loadable<*>): Boolean = values.all { it.loaded && !it.loading }
+    val p = s.project
+    return when (d) {
+      is ScreenDestination.ProjectDetail -> p.project.error != null || ready(p.project, p.counts, p.readme, p.languages, p.releases)
+      is ScreenDestination.ProjectCode -> p.project.error != null || ready(p.tree)
+      is ScreenDestination.ProjectSectionList -> p.project.error != null || ready(when (d.section) {
+        ProjectSection.ISSUES -> p.issues
+        ProjectSection.MERGE_REQUESTS -> p.mergeRequests
+        ProjectSection.PIPELINES -> p.pipelines
+        ProjectSection.COMMITS -> p.commits
+        ProjectSection.BRANCHES -> p.branches
+        ProjectSection.TAGS -> p.tags
+        ProjectSection.RELEASES -> p.releases
+        ProjectSection.CONTRIBUTORS -> p.contributors
+        ProjectSection.ACTIVITY -> p.events
+      })
+      is ScreenDestination.ReleaseDetail -> p.project.error != null || ready(p.releases)
+      is ScreenDestination.FileViewer -> ready(s.file.content)
+      is ScreenDestination.CommitDetail -> ready(s.commitDetail.commit, s.commitDetail.diffs)
+      is ScreenDestination.PipelineDetail -> ready(s.pipelineDetail.pipeline, s.pipelineDetail.jobs)
+      is ScreenDestination.JobDetail -> ready(s.jobDetail.job, s.jobDetail.trace)
+      is ScreenDestination.IssueDetail -> ready(s.issueDetail.issue, s.issueDetail.notes)
+      is ScreenDestination.MergeRequestDetail -> s.mergeRequestDetail.run { ready(mergeRequest, diffs, notes, commits, pipelines, approvals) }
+      is ScreenDestination.UserDetail -> s.userDetail.run { ready(user, projects, events) }
+      is ScreenDestination.GroupProjects -> s.group.run { ready(details, subgroups, projects) }
+      else -> true
+    }
   }
 
   /** Returns false when already at the root so the activity can finish. */
   fun navigateBack(): Boolean {
+    if (_uiState.value.pendingDestination != null) {
+      navigationJob?.cancel()
+      _uiState.update { it.copy(pendingDestination = null) }
+      ci.onDestinationChanged(_uiState.value.destination)
+      return true
+    }
     val state = _uiState.value
     val current = state.destination
     if (current is ScreenDestination.ProjectCode && state.project.treePath.isNotEmpty()) {
@@ -176,10 +228,15 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
     }
     if (state.backStack.isEmpty()) return false
     val remaining = state.backStack.dropLast(1)
-    _uiState.update { it.copy(backStack = remaining) }
     val next = remaining.lastOrNull() ?: ScreenDestination.MainTabs
+    navigationJob?.cancel()
+    _uiState.update { it.copy(pendingDestination = next) }
     ci.onDestinationChanged(next)
     load(next, force = false)
+    navigationJob = session.launch {
+      _uiState.first { readyToOpen(it, next) }
+      _uiState.update { if (it.pendingDestination == next) it.copy(backStack = remaining, pendingDestination = null) else it }
+    }
     return true
   }
 
@@ -239,16 +296,10 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
 
   fun openIssue(issue: GitLabIssue) {
     seedIssue(issue)
-    navigateToWithoutLoad(ScreenDestination.IssueDetail(issue.projectId, issue.iid))
-    openIssue(issue.projectId, issue.iid, seeded = true)
+    navigateTo(ScreenDestination.IssueDetail(issue.projectId, issue.iid))
   }
 
   fun openMergeRequest(mr: GitLabMergeRequest) = review.open(mr)
-
-  private fun navigateToWithoutLoad(destination: ScreenDestination) {
-    if (_uiState.value.destination == destination) return
-    _uiState.update { it.copy(backStack = it.backStack + destination) }
-  }
 
   // -------------------------------------------------------------------------------------------
   // Dashboard
@@ -379,6 +430,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
   }
 
   private fun clearedSessionState(state: GitLabUiState) = state.copy(
+    pendingDestination = null,
     refreshing = false,
     sessionExpired = false,
     currentUser = Loadable(null),

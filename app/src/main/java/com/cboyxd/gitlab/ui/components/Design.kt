@@ -612,6 +612,14 @@ fun InlineError(message: String, modifier: Modifier = Modifier, onRetry: (() -> 
 }
 
 @Composable
+fun LoadingPlaceholder(modifier: Modifier = Modifier) {
+  Box(modifier.width(28.dp).height(12.dp)
+    .clip(RoundedCornerShape(4.dp))
+    .background(Gl.colors.textTertiary.copy(alpha = 0.10f))
+    .semantics { contentDescription = "Loading" })
+}
+
+@Composable
 fun LoadingState(modifier: Modifier = Modifier, label: String = "Loading") {
   Box(
     modifier = modifier
@@ -620,7 +628,17 @@ fun LoadingState(modifier: Modifier = Modifier, label: String = "Loading") {
       .semantics { contentDescription = label },
     contentAlignment = Alignment.Center,
   ) {
-    CircularProgressIndicator(modifier = Modifier.size(28.dp), strokeWidth = 2.5.dp, color = Gl.colors.textSecondary)
+    Column(
+      modifier = Modifier.fillMaxWidth().padding(horizontal = GlSpace.margin),
+      verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+      repeat(4) { index ->
+        Box(Modifier.fillMaxWidth(if (index == 3) 0.55f else 1f)
+          .height(if (index == 0) 22.dp else 14.dp)
+          .clip(RoundedCornerShape(4.dp))
+          .background(Gl.colors.textTertiary.copy(alpha = 0.10f)))
+      }
+    }
   }
 }
 

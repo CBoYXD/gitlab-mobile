@@ -56,7 +56,7 @@ class ProjectFeature internal constructor(private val host: SessionHost) {
           ensureLabels(projectId)
           // A list or the code browser opened before the project arrived (from a link, say)
           // couldn't start loading without it; start it now.
-          when (val destination = host.state.value.destination) {
+          when (val destination = host.state.value.pendingDestination ?: host.state.value.destination) {
             is ScreenDestination.ProjectSectionList -> if (destination.projectId == projectId) loadSection(destination.section)
             is ScreenDestination.ProjectCode -> if (destination.projectId == projectId) ensureTree()
             else -> Unit

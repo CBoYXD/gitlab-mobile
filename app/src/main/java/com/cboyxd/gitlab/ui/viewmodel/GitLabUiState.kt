@@ -248,6 +248,7 @@ data class GitLabUiState(
 
   val currentTab: BottomTab = BottomTab.HOME,
   val backStack: List<ScreenDestination> = emptyList(),
+  val pendingDestination: ScreenDestination? = null,
 
   val refreshing: Boolean = false,
   val currentUser: Loadable<GitLabUser?> = Loadable(null),

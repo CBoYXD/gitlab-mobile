@@ -23,8 +23,8 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 /** Retry only failed requests, preserving successful images across navigation. */
 @Composable
-internal fun AvatarImage(url: String, modifier: Modifier) {
-  val model = rememberImageModel(url)
+fun AvatarImage(url: String, modifier: Modifier) {
+  val model = rememberImageModel(url, avatar = true)
   val auth = LocalImageAuth.current
   val application = LocalContext.current.applicationContext as? GitLabApplication
   val lifecycle = LocalLifecycleOwner.current.lifecycle

@@ -74,6 +74,8 @@ Without an account the app opens as a guest on GitLab.com: public projects, code
 
 Credentials are encrypted with a key held in Android Keystore and never leave the device except as the auth header to the server you added. Backups are disabled for the app.
 
+Project and group avatars use authenticated API download endpoints. On servers that restrict public visibility, uploaded user avatars may remain unavailable: GitLab's web image routes require a browser session and do not accept API tokens. The app keeps an initial for these images.
+
 ## Architecture
 
 - **UI:** Jetpack Compose with a small design system (`ui/theme`, `ui/components`): semantic color tokens with GitLab's status and accent colors, colored navigation tiles, a named type scale, motion tokens that respect *Remove animations*.

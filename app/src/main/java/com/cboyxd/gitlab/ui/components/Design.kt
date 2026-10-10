@@ -658,13 +658,22 @@ data class ImageAuth(val baseUrl: String, val accountId: String, val headerName:
 val LocalImageAuth = staticCompositionLocalOf<ImageAuth?> { null }
 
 @Composable
-fun rememberImageModel(url: String?): Any? {
+fun rememberImageModel(url: String?, avatar: Boolean = false): Any? {
   val auth = LocalImageAuth.current
   val context = LocalContext.current
-  return remember(url, auth) {
+  return remember(url, auth, avatar) {
     if (url.isNullOrBlank()) return@remember null
     val origin = auth?.baseUrl?.toHttpUrlOrNull()
-    val resolved = url.toHttpUrlOrNull() ?: origin?.resolve(url)
+    var resolved = url.toHttpUrlOrNull() ?: origin?.resolve(url)
+    if (avatar && origin != null && resolved != null) {
+      val upload = Regex("/uploads/(?:-/system/)?(project|group)/avatar/(\\d+)/").find(resolved.encodedPath)
+      if (upload != null) {
+        val resource = if (upload.groupValues[1] == "project") "projects" else "groups"
+        resolved = origin.resolve("api/v4/$resource/${upload.groupValues[2]}/avatar")
+      } else if (resolved.scheme == "http" && resolved.host == origin.host) {
+        resolved = resolved.newBuilder().scheme(origin.scheme).port(origin.port).build()
+      }
+    }
     if (resolved == null) return@remember null
     val builder = ImageRequest.Builder(context).data(resolved.toString()).crossfade(180)
     if (auth != null && origin != null && resolved.scheme == origin.scheme &&

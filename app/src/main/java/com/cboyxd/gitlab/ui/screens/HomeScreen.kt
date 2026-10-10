@@ -382,10 +382,8 @@ internal fun ProjectTile(project: GitLabProject, modifier: Modifier = Modifier, 
       color = c.textSecondary,
     )
     if (!project.avatarUrl.isNullOrBlank()) {
-      coil.compose.AsyncImage(
-        model = com.cboyxd.gitlab.ui.components.rememberImageModel(project.avatarUrl),
-        contentDescription = null,
-        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+      com.cboyxd.gitlab.ui.components.AvatarImage(
+        url = project.avatarUrl,
         modifier = Modifier.fillMaxSize(),
       )
     }

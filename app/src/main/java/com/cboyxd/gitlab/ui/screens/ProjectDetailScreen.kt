@@ -84,7 +84,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
-import coil.compose.AsyncImage
 import com.cboyxd.gitlab.data.model.GitLabProject
 import com.cboyxd.gitlab.data.model.GitLabRelease
 import com.cboyxd.gitlab.ui.components.ColorTile
@@ -107,7 +106,7 @@ import com.cboyxd.gitlab.ui.components.SwapIcon
 import com.cboyxd.gitlab.ui.components.Tone
 import com.cboyxd.gitlab.ui.components.formatCompact
 import com.cboyxd.gitlab.ui.components.pressable
-import com.cboyxd.gitlab.ui.components.rememberImageModel
+import com.cboyxd.gitlab.ui.components.AvatarImage
 import com.cboyxd.gitlab.ui.theme.Gl
 import com.cboyxd.gitlab.ui.theme.GlSpace
 import com.cboyxd.gitlab.ui.theme.GlTile
@@ -658,12 +657,7 @@ private fun NamespaceAvatar(project: GitLabProject) {
   ) {
     Text(namespaceOf(project).firstOrNull()?.uppercase() ?: "?", style = Gl.type.badge, color = c.textSecondary)
     if (!url.isNullOrBlank()) {
-      AsyncImage(
-        model = rememberImageModel(url),
-        contentDescription = null,
-        contentScale = ContentScale.Crop,
-        modifier = Modifier.matchParentSize(),
-      )
+      AvatarImage(url = url, modifier = Modifier.matchParentSize())
     }
   }
 }

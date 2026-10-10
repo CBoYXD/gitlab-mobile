@@ -4,6 +4,7 @@ import android.content.ActivityNotFoundException
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.SizeTransform
@@ -159,11 +160,13 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
 
   val imageAuth = remember(uiState.activeInstance) {
     uiState.activeInstance?.let { instance ->
-      val baseUrl = normalizeBaseUrl(instance.url)
-      if (instance.authKind == GitLabAuth.KIND_OAUTH) {
-        ImageAuth(baseUrl, instance.id, "Authorization", "Bearer ${instance.token}")
+      val baseUrl = normalizeBaseUrl(instance.url).toHttpUrl().toString()
+      val token = instance.token.trim()
+      if (instance.authKind == GitLabAuth.KIND_OAUTH || token.startsWith("Bearer ", ignoreCase = true)) {
+        val value = if (token.startsWith("Bearer ", ignoreCase = true)) token.substringAfter(' ').trim() else token
+        ImageAuth(baseUrl, instance.id, "Authorization", "Bearer $value")
       } else {
-        ImageAuth(baseUrl, instance.id, "PRIVATE-TOKEN", instance.token)
+        ImageAuth(baseUrl, instance.id, "PRIVATE-TOKEN", token)
       }
     }
   }

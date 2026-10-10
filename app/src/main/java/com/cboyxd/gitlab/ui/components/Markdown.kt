@@ -53,6 +53,7 @@ import androidx.compose.ui.text.withLink
 import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.dp
 import coil.compose.AsyncImage
+import com.cboyxd.gitlab.ui.theme.CodeFont
 import com.cboyxd.gitlab.ui.theme.Gl
 import com.cboyxd.gitlab.ui.theme.GlColors
 import com.cboyxd.gitlab.ui.theme.GlRadius
@@ -419,7 +420,7 @@ private class MarkdownBuilder(
       GFMElementTypes.STRIKETHROUGH -> withStyle(SpanStyle(textDecoration = TextDecoration.LineThrough)) { node.children.filterNot { it.type == GFMTokenTypes.TILDE }.forEach { appendInline(it) } }
       MarkdownElementTypes.CODE_SPAN -> {
         val code = node.children.filterNot { it.type == MarkdownTokenTypes.BACKTICK }.joinToString("") { text(it) }.trim()
-        withStyle(SpanStyle(fontFamily = FontFamily.Monospace, background = colors.codeBg)) { append(" $code ") }
+        withStyle(SpanStyle(fontFamily = CodeFont, background = colors.codeBg)) { append(" $code ") }
       }
       MarkdownElementTypes.INLINE_LINK -> {
         val label = node.children.firstOrNull { it.type == MarkdownElementTypes.LINK_TEXT }
@@ -467,7 +468,7 @@ private class MarkdownBuilder(
     val base = context.webBase?.trimEnd('/') ?: return built
     val host = base.substringBefore("://") + "://" + base.substringAfter("://").substringBefore('/')
     val taken = built.getLinkAnnotations(0, built.length).map { it.start until it.end } +
-      built.spanStyles.filter { it.item.fontFamily == FontFamily.Monospace }.map { it.start until it.end }
+      built.spanStyles.filter { it.item.fontFamily == CodeFont }.map { it.start until it.end }
     val matches = REFERENCE.findAll(built.text).filter { m -> taken.none { r -> m.range.first <= r.last && r.first <= m.range.last } }.toList()
     if (matches.isEmpty()) return built
     val style = TextLinkStyles(SpanStyle(color = colors.link, textDecoration = TextDecoration.Underline))

@@ -85,6 +85,7 @@ import com.cboyxd.gitlab.ui.components.StateIcon
 import com.cboyxd.gitlab.ui.components.formatDuration
 import com.cboyxd.gitlab.ui.components.pipelineStatusStyle
 import com.cboyxd.gitlab.ui.components.pressable
+import com.cboyxd.gitlab.ui.theme.CodeFont
 import com.cboyxd.gitlab.ui.theme.Gl
 import com.cboyxd.gitlab.ui.theme.GlSpace
 import com.cboyxd.gitlab.ui.viewmodel.JobDetailState
@@ -484,7 +485,7 @@ private fun JobLog(state: JobDetailState, onRetryLoad: () -> Unit, modifier: Mod
           scrolledInitially = true
         }
       }
-      val style = Gl.type.monoSmall.copy(fontFamily = FontFamily.Monospace, fontSize = 12.sp, lineHeight = 18.sp)
+      val style = Gl.type.monoSmall.copy(fontFamily = CodeFont, fontSize = 12.sp, lineHeight = 18.sp)
       val measurer = rememberTextMeasurer()
       val charWidth = remember(style) { measurer.measure("0", style).size.width.toFloat() }
       val longest = remember(parsed) { (parsed.maxOfOrNull { it.text.length } ?: 0).coerceAtMost(600) }

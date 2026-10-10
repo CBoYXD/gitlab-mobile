@@ -27,8 +27,11 @@ A native Android client for GitLab.com and self-hosted GitLab servers, built wit
 **Merge requests and issues**
 - Lists with dropdown filters, colored labels (including scoped labels), comment counts and pipeline status
 - Issue page with its timeline: comments, label changes and other events, plus a details sheet (assignees, labels, milestone, due date, weight, time tracking)
+- Create merge requests between branches with searchable source and target selection
 - Merge request page with source and target branches, a folding description, Changes (files, commits, pipelines), Status (approvals, pipeline, whether it can merge) and Conversation
-- Files changed view with sticky file headers, hunk headers, highlighted additions and deletions down to the changed words, and files you can mark as viewed
+- Grouped discussion threads and replies, with highlighted diff context from the original revision, a comments/activity filter and a quick jump to comments
+- Files changed view with sticky file headers, hunk headers, syntax highlighting, additions and deletions down to the changed words, and files you can mark as viewed
+- Searchable file navigation and saved diff preferences: wrapping, line numbers, syntax colors and font size
 - Markdown editor with a formatting toolbar and live preview for comments, descriptions and new issues
 - Merge, close, reopen, comment and edit when signed in
 
@@ -101,6 +104,8 @@ The tests cover the API layer (pagination limits, cancellation, JSON null handli
 ## Credits
 
 File and folder icons are a curated subset of [Material Icon Theme](https://github.com/material-extensions/vscode-material-icon-theme) (MIT, license in `app/src/main/assets/file-icons/LICENSE`). Refresh them with `tools/update_file_icons.py`; the popular set it keeps is listed at the top of that script.
+
+Code and job logs use bundled [Liberation Mono](https://github.com/liberationfonts/liberation-fonts) (SIL Open Font License, license in `app/src/main/assets/licenses/liberation-mono.txt`).
 
 ## License
 

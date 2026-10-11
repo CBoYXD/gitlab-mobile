@@ -12,7 +12,6 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
-import androidx.compose.ui.unit.sp
 import com.cboyxd.gitlab.ui.components.ColorTile
 import com.cboyxd.gitlab.ui.components.GlIconAction
 import com.cboyxd.gitlab.ui.theme.GlTile
@@ -125,7 +124,7 @@ fun HomeScreen(
                 url = user?.avatarUrl,
                 name = user?.name?.ifBlank { user.username } ?: instance.username.ifBlank { instance.name },
                 size = 30.dp,
-                modifier = Modifier.semantics { contentDescription = if (state.isSignedIn) "Your profile" else "Account" },
+                modifier = Modifier.semantics { contentDescription = if (state.isSignedIn) "Your profile" else "Sign in" },
               )
             }
           }
@@ -136,9 +135,9 @@ fun HomeScreen(
         item(key = "onboarding") {
           EmptyState(
             icon = Icons.Outlined.CloudOff,
-            title = "Connect a GitLab server",
-            body = "Add GitLab.com or your company's server to see your issues, merge requests and pipelines.",
-            actionLabel = "Add server",
+            title = "Add a GitLab account",
+            body = "Sign in to GitLab.com or your company's server to see your issues, merge requests and pipelines.",
+            actionLabel = "Add account",
             onAction = onAddServer,
           )
         }
@@ -302,7 +301,7 @@ private fun SessionBanner(text: String, actionLabel: String, onAction: () -> Uni
     )
     Spacer(Modifier.width(8.dp))
     Text(text, style = Gl.type.meta, color = c.textPrimary, modifier = Modifier.weight(1f).padding(vertical = 8.dp))
-    TextButton(onClick = onAction) { Text(actionLabel.uppercase(), style = Gl.type.label, color = Gl.colors.accent) }
+    TextButton(onClick = onAction) { Text(actionLabel, style = Gl.type.label, color = Gl.colors.accent) }
   }
 }
 
@@ -316,8 +315,11 @@ private fun <T> WorkRow(
   onClick: () -> Unit,
   badge: String? = null,
 ) {
+  val failed = feed.error != null && feed.data.isEmpty()
   GlRow(
     title = title,
+    // The list behind the row has the retry, so the error says to open it.
+    subtitle = if (failed) "Unable to load. Open to try again." else null,
     leading = { ColorTile(icon = icon, color = tile) },
     onClick = onClick,
     trailing = when {
@@ -326,8 +328,8 @@ private fun <T> WorkRow(
           LoadingPlaceholder()
         }
       }
-      feed.error != null && feed.data.isEmpty() -> {
-        { Icon(Icons.Outlined.ErrorOutline, contentDescription = "Couldn't load", tint = Gl.colors.danger, modifier = Modifier.size(18.dp)) }
+      failed -> {
+        { Icon(Icons.Outlined.ErrorOutline, contentDescription = null, tint = Gl.colors.danger, modifier = Modifier.size(18.dp)) }
       }
       badge != null -> { { GlBadge(text = badge, tone = Tone.Danger) } }
       count != null && count > 0 -> { { CountText(count) } }
@@ -357,7 +359,7 @@ private fun FavoriteProjectRow(project: GitLabProject, onClick: () -> Unit) {
       }
       Text(
         project.name,
-        style = Gl.type.rowTitle.copy(fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
+        style = Gl.type.rowTitle.copy(fontWeight = FontWeight.SemiBold),
         color = Gl.colors.textPrimary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

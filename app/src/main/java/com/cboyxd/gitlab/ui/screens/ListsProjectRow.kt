@@ -29,7 +29,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import com.cboyxd.gitlab.data.model.GitLabProject
 import com.cboyxd.gitlab.ui.components.compactAge
 import com.cboyxd.gitlab.ui.components.formatCompact
@@ -67,7 +66,7 @@ internal fun ListsProjectRow(
       }
       Text(
         project.name,
-        style = Gl.type.rowTitle.copy(fontWeight = FontWeight.SemiBold, fontSize = 17.sp),
+        style = Gl.type.rowTitle.copy(fontWeight = FontWeight.SemiBold),
         color = c.textPrimary,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

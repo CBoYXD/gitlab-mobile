@@ -16,6 +16,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -68,7 +69,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.testTagsAsResourceId
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -281,8 +284,17 @@ fun MainScreen(viewModel: GitLabViewModel, onExit: () -> Unit) {
           color = c.surface,
           tonalElevation = 4.dp,
         ) {
-          TextButton(onClick = { viewModel.navigateBack() }) {
-            Text("Opening…  ·  Cancel", style = Gl.type.meta, color = c.textSecondary)
+          Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(start = 16.dp, end = 4.dp)) {
+            // Polite live region: screen readers hear that the next screen is still loading.
+            Text(
+              "Opening…",
+              style = Gl.type.meta,
+              color = c.textSecondary,
+              modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+            )
+            TextButton(onClick = { viewModel.navigateBack() }) {
+              Text("Cancel", style = Gl.type.label, color = c.accent)
+            }
           }
         }
       }
@@ -626,7 +638,7 @@ private fun InstanceSwitcherSheet(
           ).joinToString(" · "),
           leading = { GitLabTanukiIcon(size = 24.dp) },
           trailing = {
-            if (selected) Icon(Icons.Outlined.Check, contentDescription = "Current server", tint = c.textPrimary)
+            if (selected) Icon(Icons.Outlined.Check, contentDescription = "Current account", tint = c.textPrimary)
           },
           onClick = {
             close {

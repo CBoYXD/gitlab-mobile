@@ -72,7 +72,7 @@ fun UserProfileScreen(
       }
       GlIconAction(
         icon = Icons.Outlined.Settings,
-        contentDescription = "Accounts and servers",
+        contentDescription = "Accounts",
         onClick = onOpenSwitcher,
         modifier = Modifier.testTag("profile_settings_button"),
       )

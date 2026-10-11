@@ -240,7 +240,7 @@ data class MergeRequestDetailState(
 )
 
 data class GitLabUiState(
-  /** False until saved servers have been read from encrypted storage. */
+  /** False until saved accounts have been read from encrypted storage. */
   val bootstrapped: Boolean = false,
   val storageError: String? = null,
   val activeInstance: GitLabInstance? = null,

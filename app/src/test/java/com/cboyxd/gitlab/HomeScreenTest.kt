@@ -72,7 +72,7 @@ class HomeScreenTest {
   @Test
   fun `guest avatar opens the account entry point`() {
     show(Fakes.guestState())
-    rule.onNodeWithContentDescription("Account").performClick()
+    rule.onNodeWithContentDescription("Sign in").performClick()
     assertEquals(1, profileClicks)
   }
 

@@ -686,7 +686,7 @@ private fun ChangesRows(state: MergeRequestDetailState, onOpenPage: (MrPage) -> 
     ) {
       when {
         diffs.initialLoading -> SmallSpinner()
-        diffs.error != null && diffs.data.isEmpty() -> Icon(Icons.Outlined.ErrorOutline, "Couldn't load", tint = c.danger, modifier = Modifier.size(18.dp))
+        diffs.error != null && diffs.data.isEmpty() -> Icon(Icons.Outlined.ErrorOutline, "Unable to load changes", tint = c.danger, modifier = Modifier.size(18.dp))
         else -> DiffCounts(stats.added, stats.removed)
       }
     }

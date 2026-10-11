@@ -138,7 +138,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
           refreshDashboard()
         },
         onFailure = { error ->
-          _uiState.update { it.copy(bootstrapped = true, storageError = error.message ?: "Unable to read saved servers.") }
+          _uiState.update { it.copy(bootstrapped = true, storageError = error.message ?: "Unable to read saved accounts.") }
         }
       )
     }
@@ -476,7 +476,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
           active?.let { notify("Switched to ${it.name}") }
           refreshDashboard()
         },
-        onFailure = { error -> notifyError(error.message ?: "Unable to switch servers.") }
+        onFailure = { error -> notifyError(error.message ?: "Unable to switch accounts.") }
       )
     }
   }
@@ -495,10 +495,10 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
       }.fold(
         onSuccess = { (instances, active) ->
           publishInstances(instances, active)
-          notify("Server removed")
+          notify("Account removed")
           if (wasActive) refreshDashboard()
         },
-        onFailure = { error -> notifyError(error.message ?: "Unable to remove the server.") }
+        onFailure = { error -> notifyError(error.message ?: "Unable to remove the account.") }
       )
     }
   }
@@ -593,7 +593,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
         return@launch
       }
       if (state != pending.state || code.isNullOrBlank()) {
-        val message = "GitLab sign-in didn't finish. Start it again from Add server."
+        val message = "GitLab sign-in didn't finish. Try again from Add account."
         _uiState.update { it.copy(loginState = LoginState(isError = true, message = message)) }
         notifyError(message)
         return@launch
@@ -701,7 +701,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
               refreshDashboard()
             },
             onFailure = { error ->
-              _uiState.update { it.copy(loginState = LoginState(isError = true, message = error.message ?: "Unable to save the server.")) }
+              _uiState.update { it.copy(loginState = LoginState(isError = true, message = error.message ?: "Unable to save the account.")) }
             }
           )
         },
@@ -740,7 +740,7 @@ class GitLabViewModel(application: Application) : AndroidViewModel(application) 
 
   /** Runs a request against the active server; on 401 with OAuth, refreshes once and retries. */
   private suspend fun <T> api(block: suspend (GitLabInstance) -> Result<T>): Result<T> {
-    val instance = freshInstance() ?: return Result.failure(GitLabApiException(0, "Add a GitLab server first."))
+    val instance = freshInstance() ?: return Result.failure(GitLabApiException(0, "Add a GitLab account first."))
     val first = block(instance).let { result ->
       // Without an account a 401 means "sign in to see this", not an expired session.
       val code = (result.exceptionOrNull() as? GitLabApiException)?.code

@@ -143,7 +143,7 @@ fun InstancesScreen(
       ) {
         if (activeInstance != null) {
           item(key = "current") {
-            GlSectionHeader(title = "Current server", modifier = Modifier.padding(top = 0.dp))
+            GlSectionHeader(title = "Current account", modifier = Modifier.padding(top = 0.dp))
             CurrentServerCard(activeInstance, Modifier.padding(horizontal = GlSpace.margin))
           }
         }
@@ -161,7 +161,7 @@ fun InstancesScreen(
                 leading = { GitLabTanukiIcon(size = 24.dp) },
                 trailing = {
                   if (active) {
-                    Icon(Icons.Outlined.Check, contentDescription = "Current server", tint = Gl.colors.textPrimary)
+                    Icon(Icons.Outlined.Check, contentDescription = "Current account", tint = Gl.colors.textPrimary)
                   }
                   GlIconAction(
                     icon = Icons.Outlined.DeleteOutline,
@@ -213,7 +213,7 @@ fun InstancesScreen(
       title = { Text("Remove ${instance.name}?", style = Gl.type.sectionTitle, color = Gl.colors.textPrimary) },
       text = {
         Text(
-          "The app signs out of this server and forgets its saved access token. This doesn't delete anything on the server.",
+          "The app signs out of this account and forgets its saved access token. Nothing is deleted on the server.",
           style = Gl.type.bodySmall,
           color = Gl.colors.textSecondary,
         )
@@ -426,7 +426,7 @@ private fun AddServerSheet(
         onValueChange = { name = it },
         label = { Text("Display name (optional)") },
         placeholder = { Text(if (GitLabAuth.isGitLabCom(url)) "GitLab.com" else "Company GitLab") },
-        supportingText = { Text("Shown in the server list") },
+        supportingText = { Text("Shown in the account list") },
         singleLine = true,
         enabled = !busy,
         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Next),

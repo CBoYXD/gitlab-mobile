@@ -132,9 +132,9 @@ fun ProjectsScreen(
     if (!hasServer) {
       EmptyState(
         icon = Icons.Outlined.CloudOff,
-        title = "Connect a GitLab server",
-        body = "Your projects appear here once you add a server.",
-        actionLabel = "Add server",
+        title = "Add a GitLab account",
+        body = "Your projects appear here once you add an account.",
+        actionLabel = "Add account",
         onAction = onAddServer,
       )
       return@Column

@@ -175,7 +175,7 @@ private fun BranchPickerDialog(
     if (query.isNotBlank()) delay(300)
     loader(projectId, query.trim()).fold(
       onSuccess = { branches = it; loading = false },
-      onFailure = { branches = emptyList(); error = it.message ?: "Couldn't load branches"; loading = false },
+      onFailure = { branches = emptyList(); error = it.message ?: "Unable to load branches"; loading = false },
     )
   }
   Dialog(onDismissRequest = onDismiss) {

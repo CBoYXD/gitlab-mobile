@@ -221,7 +221,7 @@ class GitLabPasswordLogin(
   private inline fun guard(block: () -> PasswordLoginOutcome): PasswordLoginOutcome = try {
     block()
   } catch (error: IOException) {
-    PasswordLoginOutcome.Failed("Couldn't reach the server.")
+    PasswordLoginOutcome.Failed("Unable to reach the server. Check the address and your connection.")
   } catch (error: IllegalArgumentException) {
     PasswordLoginOutcome.Failed(error.message ?: "Enter a GitLab server URL.")
   }

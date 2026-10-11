@@ -9,10 +9,13 @@ import androidx.compose.ui.test.onFirst
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollToNode
+import com.cboyxd.gitlab.data.model.GitLabDiscussion
+import com.cboyxd.gitlab.data.model.GitLabNote
 import com.cboyxd.gitlab.ui.screens.IssueDetailScreen
 import com.cboyxd.gitlab.ui.screens.MergeRequestDetailScreen
 import com.cboyxd.gitlab.ui.theme.GitLabTheme
 import com.cboyxd.gitlab.ui.viewmodel.IssueDetailState
+import com.cboyxd.gitlab.ui.viewmodel.Loadable
 import com.cboyxd.gitlab.ui.viewmodel.MergeRequestDetailState
 import com.github.takahirom.roborazzi.RobolectricDeviceQualifiers
 import org.junit.Assert.assertTrue
@@ -111,6 +114,27 @@ class DetailScreensTest {
       rule.onNodeWithText(it, substring = true).assertExists()
     }
     rule.onNodeWithText("Merge").assertExists()
+  }
+
+  @Test
+  fun `guests see the merge request's comment count when discussions are hidden`() {
+    val base = Fakes.mergeRequestDetail()
+    showMr(
+      base.copy(
+        mergeRequest = base.mergeRequest.copy(data = base.mergeRequest.data!!.copy(userNotesCount = 5)),
+        discussions = Loadable(emptyList(), loaded = true, error = "401 Unauthorized"),
+      ),
+      canWrite = false,
+    )
+    rule.onNodeWithText("5 comments").assertExists()
+  }
+
+  @Test
+  fun `a single comment reads in the singular`() {
+    val base = Fakes.mergeRequestDetail()
+    val note = GitLabNote(id = 3, body = "Ship it.", author = Fakes.user, createdAt = "1h ago")
+    showMr(base.copy(discussions = Loadable(listOf(GitLabDiscussion("d1", individualNote = true, notes = listOf(note))), loaded = true)))
+    rule.onNodeWithText("1 comment").assertExists()
   }
 
   @Test

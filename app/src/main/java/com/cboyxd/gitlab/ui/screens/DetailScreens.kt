@@ -541,7 +541,12 @@ private fun MergeRequestOverview(
   val listState = rememberLazyListState()
   val scope = rememberCoroutineScope()
   var showAllActivity by rememberSaveable(state.projectId, state.iid) { mutableStateOf(false) }
-  val commentCount = state.discussions.data.sumOf { d -> d.notes.count { !it.system } }
+  // GitLab.com hides discussions from guests; the merge request's own counter still has the number.
+  val commentCount = if (state.discussions.loaded && state.discussions.error == null) {
+    state.discussions.data.sumOf { d -> d.notes.count { !it.system } }
+  } else {
+    mr?.userNotesCount ?: 0
+  }
   val scrolledPastTitle by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
 
   Column(modifier = modifier.fillMaxSize().background(c.bg)) {
@@ -609,7 +614,7 @@ private fun MergeRequestOverview(
             }
 
             item(key = "comments-link") {
-              GlButton("$commentCount comments", onClick = {
+              GlButton(plural(commentCount, "comment", "comments"), onClick = {
                 scope.launch { listState.animateScrollToItem(if (state.mergeRequest.error != null) 8 else 7) }
               }, kind = GlButtonKind.Ghost, icon = Icons.Outlined.ChatBubbleOutline, modifier = Modifier.fillMaxWidth())
             }

@@ -240,7 +240,7 @@ private fun RefPickerRow(ref: String, isDefault: Boolean, onClick: () -> Unit) {
       DefaultBadge()
     }
     Spacer(Modifier.weight(1f))
-    Text("CHANGE", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold, letterSpacing = Gl.type.caps.letterSpacing), color = c.accent)
+    Text("Change", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.accent)
   }
 }
 

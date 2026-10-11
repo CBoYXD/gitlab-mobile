@@ -877,7 +877,7 @@ private fun MergeSplitButton(enabled: Boolean, loading: Boolean, onMerge: () -> 
       if (loading) {
         androidx.compose.material3.CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp, color = fg)
       } else {
-        Text("MERGE", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = fg)
+        Text("Merge", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = fg)
       }
     }
     Box(Modifier.width(1.dp).fillMaxHeight().background(Color.Black.copy(alpha = 0.2f)))

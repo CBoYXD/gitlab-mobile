@@ -207,7 +207,7 @@ internal fun shareLink(context: Context, url: String, title: String) {
 }
 
 /**
- * Floating actions at the bottom right of an issue or merge request: a "COMMENT" pill when the
+ * Floating actions at the bottom right of an issue or merge request: a "Comment" pill when the
  * viewer can comment, and a round button for the details sheet.
  */
 @Composable
@@ -234,7 +234,7 @@ internal fun BoxScope.DetailFloatingActions(onComment: (() -> Unit)?, onInfo: ()
       ) {
         Icon(Icons.AutoMirrored.Outlined.Chat, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
-        Text("COMMENT", style = Gl.type.label, color = c.textPrimary)
+        Text("Comment", style = Gl.type.label, color = c.textPrimary)
       }
     }
     Box(

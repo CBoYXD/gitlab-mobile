@@ -81,7 +81,7 @@ class DetailScreensTest {
   @Test
   fun `signed-in viewers get the comment button and see comments`() {
     showIssue(Fakes.issueDetail(), canWrite = true)
-    rule.onNodeWithText("COMMENT").assertIsDisplayed()
+    rule.onNodeWithText("Comment").assertIsDisplayed()
     scrollTo("I can reproduce this.")
     rule.onNodeWithText("I can reproduce this.", substring = true).assertExists()
   }
@@ -89,7 +89,7 @@ class DetailScreensTest {
   @Test
   fun `guests see a sign-in hint instead of an error when comments are hidden`() {
     showIssue(Fakes.issueDetail(notesFailed = true), canWrite = false)
-    rule.onNodeWithText("COMMENT").assertDoesNotExist()
+    rule.onNodeWithText("Comment").assertDoesNotExist()
     scrollTo("Sign in to see comments and activity.")
     rule.onNodeWithText("Sign in to see comments and activity.").assertExists()
     rule.onNodeWithText("403 Forbidden", substring = true).assertDoesNotExist()
@@ -110,15 +110,15 @@ class DetailScreensTest {
       scrollTo(it)
       rule.onNodeWithText(it, substring = true).assertExists()
     }
-    rule.onNodeWithText("MERGE").assertExists()
+    rule.onNodeWithText("Merge").assertExists()
   }
 
   @Test
   fun `guests get no merge button`() {
     showMr(canWrite = false)
     scrollTo("Status")
-    rule.onNodeWithText("MERGE").assertDoesNotExist()
-    rule.onNodeWithText("COMMENT").assertDoesNotExist()
+    rule.onNodeWithText("Merge").assertDoesNotExist()
+    rule.onNodeWithText("Comment").assertDoesNotExist()
   }
 
   @Test

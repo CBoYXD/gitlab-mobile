@@ -500,7 +500,7 @@ private fun ProjectHeader(
       ) {
         Icon(Icons.Outlined.CallSplit, contentDescription = null, tint = c.textPrimary, modifier = Modifier.size(20.dp))
         Spacer(Modifier.width(10.dp))
-        Text("FORK", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.textPrimary)
+        Text("Fork", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.textPrimary)
       }
       val cloneUrl = project.httpUrlToRepo.ifBlank { "${project.webUrl}.git" }
       HeaderButton(
@@ -630,7 +630,7 @@ private fun BranchRow(ref: String, isTag: Boolean, onChange: () -> Unit) {
       Text(ref, style = Gl.type.rowTitle, color = c.textPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     TextButton(onClick = onChange) {
-      Text("CHANGE", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold, letterSpacing = Gl.type.caps.letterSpacing), color = c.accent)
+      Text("Change", style = Gl.type.label.copy(fontWeight = FontWeight.SemiBold), color = c.accent)
     }
   }
 }

@@ -138,6 +138,6 @@ class CodeScreensTest {
   fun `the branch row shows the ref with a change action`() {
     showCode()
     rule.onNodeWithText("main", substring = true).assertExists()
-    rule.onNodeWithText("CHANGE").assertIsDisplayed()
+    rule.onNodeWithText("Change").assertIsDisplayed()
   }
 }

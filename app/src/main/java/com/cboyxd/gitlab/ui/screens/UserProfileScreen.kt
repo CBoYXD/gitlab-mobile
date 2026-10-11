@@ -148,7 +148,7 @@ private fun ProfileContent(
         leading = { GitLabTanukiIcon(size = 28.dp) },
         trailing = {
           TextButton(onClick = onManageServers) {
-            Text("MANAGE", style = Gl.type.label, color = Gl.colors.accent)
+            Text("Manage", style = Gl.type.label, color = Gl.colors.accent)
           }
         },
       )

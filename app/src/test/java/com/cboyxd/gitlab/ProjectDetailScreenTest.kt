@@ -141,6 +141,6 @@ class ProjectDetailScreenTest {
     val state = Fakes.projectState().copy(counts = com.cboyxd.gitlab.ui.viewmodel.Loadable(null, loading = true))
     show(state)
     rule.onNodeWithText("12", useUnmergedTree = true).assertExists()
-    rule.onNodeWithContentDescription("Loading count", useUnmergedTree = true).assertExists()
+    rule.onNodeWithContentDescription("Loading", useUnmergedTree = true).assertExists()
   }
 }

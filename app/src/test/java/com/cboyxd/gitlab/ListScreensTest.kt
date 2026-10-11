@@ -51,6 +51,7 @@ class ListScreensTest {
         projects = Fakes.projects,
         onSelectMergeRequest = { openedMrs += it },
         onCreateMergeRequest = { _, _, _, _, _, _ -> },
+        onLoadBranches = { _, _ -> Result.success(emptyList()) },
         onRetry = {},
         onBack = {},
       )

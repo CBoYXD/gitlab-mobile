@@ -16,6 +16,7 @@ CI uses Ubuntu 24.04, Temurin JDK 25, Android SDK 36.1, build-tools 36.0.0 and t
 
 The checks are:
 
+- Release notes generator tests using temporary git repositories (Python standard library only).
 - `:app:testDebugUnitTest`: unit tests and Compose UI tests on Robolectric.
 - `:app:lintDebug`: Android Lint; errors fail CI.
 - `:app:assembleDebug`: an installable APK, available in the run's **Artifacts** for 14 days.
@@ -70,9 +71,37 @@ The workflow uses the built-in `GITHUB_TOKEN` to publish releases. No personal a
 - `gitlab-mobile-1.5.0.aab` for a future Play Console upload.
 - `SHA256SUMS` for the two files.
 
-Release notes are generated from changes since the preceding release. A tag with a hyphen creates a prerelease and is never marked latest. Signed files are also retained in the Actions run for 14 days. GitHub Release assets remain available independently of Actions retention. Nothing is automatically uploaded to Google Play.
+Release notes are generated directly from commit messages, including direct pushes to `main`; pull requests are not required. A tag with a hyphen creates a prerelease and is never marked latest. Signed files are also retained in the Actions run for 14 days. GitHub Release assets remain available independently of Actions retention. Nothing is automatically uploaded to Google Play.
 
 To verify a download, place both binaries and `SHA256SUMS` in the same directory and run `sha256sum --check SHA256SUMS`.
+
+## Release notes
+
+Use Conventional Commit subjects describing the actual change:
+
+| Commit | Release section |
+| --- | --- |
+| `feat: add global search` | Features |
+| `fix(accounts): preserve the selected account` | Fixes (with the `accounts` scope) |
+| `perf: reduce loading time` | Performance |
+| `feat(auth)!: replace the token format` or a `BREAKING CHANGE:` footer | Breaking changes |
+| `docs:`, `ci:` | Always omitted |
+| `chore:`, `test:`, `build:`, `style:`, `refactor:` | Omitted unless marked as a breaking change |
+| Other subjects without a known type | Other changes |
+
+Messages appear in their original language; the generator groups them without rewriting or translating them. Every entry links to its commit. Merge messages are omitted, while the commits brought in by the merge are included. Releases containing only internal work say "No user-facing changes in this release." A full changelog link is always included.
+
+The baseline is the highest lower version tag reachable from the target tag. Stable releases use the previous **stable** tag, so changes already included in an RC still appear in the final release. Prereleases may use a preceding prerelease (for example `rc.10` follows `rc.2`). Unmerged tags, higher versions and commits newer than the target tag are excluded. The first release includes all available history. The release checkout fetches full history and tags; the generator rejects shallow repositories.
+
+Preview notes for an existing tag locally without publishing anything:
+
+```bash
+python3 .github/scripts/generate-release-notes.py \
+  --tag v1.4.0 --repository CBoYXD/gitlab-mobile --output /tmp/release-notes.md
+cat /tmp/release-notes.md
+```
+
+Run the generator tests with `python3 -m unittest discover -s .github/scripts/tests -v`. The generated `release-notes.md` is saved alongside the signed binaries in the Actions artifact and passed to `gh release create --notes-file` at publication time.
 
 ## Failures and retries
 

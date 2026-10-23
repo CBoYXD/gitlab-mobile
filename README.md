@@ -109,7 +109,7 @@ The tests cover the API layer (pagination limits, cancellation, JSON null handli
 
 GitHub Actions runs tests, Android Lint and debug builds for pull requests into `main` and pushes to `main` that change the app, Gradle build files or CI configuration. Documentation-only changes skip CI entirely. Download the debug APK and test/lint reports from the run's **Artifacts**. A clean checkout generates a debug signing key automatically; a local `debug.keystore`, when present, is still used for existing local installs.
 
-Pushing a version tag such as `v1.5.0` runs the same checks, builds signed APK/AAB files and publishes a GitHub Release with generated release notes and SHA-256 checksums. The tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each release. Tags such as `v1.5.0-rc.1` publish prereleases.
+Pushing a version tag such as `v1.5.0` runs the same checks, builds signed APK/AAB files and publishes a GitHub Release with release notes generated from commit messages and SHA-256 checksums. `feat:`, `fix:` and `perf:` commits are grouped into features, fixes and performance improvements; documentation, CI and internal maintenance commits are omitted. The tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each release. Tags such as `v1.5.0-rc.1` publish prereleases.
 
 See [the release guide](docs/releases.md) for signing secrets, release commands and retries.
 

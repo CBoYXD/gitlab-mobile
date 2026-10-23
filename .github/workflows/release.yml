@@ -42,7 +42,15 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          fetch-depth: 0
           persist-credentials: false
+      - name: Generate release notes from commits
+        env:
+          TAG: ${{ github.ref_name }}
+        run: >-
+          python3 .github/scripts/generate-release-notes.py
+          --tag "$TAG" --repository "$GITHUB_REPOSITORY"
+          --output dist/release-notes.md
       - name: Restore release signing key
         env:
           KEYSTORE_PATH: ${{ runner.temp }}/gitlab-mobile-release.jks
@@ -117,7 +125,7 @@ jobs:
           cd dist
           sha256sum --check SHA256SUMS
           # Never overwrite an existing release's binaries on a rerun.
-          args=(--verify-tag --generate-notes --title "GitLab Mobile ${TAG}")
+          args=(--verify-tag --notes-file release-notes.md --title "GitLab Mobile ${TAG}")
           if [[ "$TAG" == *-* ]]; then
             args+=(--prerelease --latest=false)
           fi

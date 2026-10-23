@@ -18,3 +18,4 @@ local.properties
 *.jks
 *.keystore
 gradle/gradle-daemon-jvm.properties
+__pycache__/

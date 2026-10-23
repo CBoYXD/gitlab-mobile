@@ -24,7 +24,7 @@ android {
       val keystorePath = System.getenv("KEYSTORE_PATH") ?: "${rootDir}/my-upload-key.jks"
       storeFile = file(keystorePath)
       storePassword = System.getenv("STORE_PASSWORD")
-      keyAlias = "upload"
+      keyAlias = System.getenv("KEY_ALIAS")?.takeIf { it.isNotBlank() } ?: "upload"
       keyPassword = System.getenv("KEY_PASSWORD")
     }
     create("debugConfig") {
@@ -42,7 +42,12 @@ android {
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       signingConfig = signingConfigs.getByName("release")
     }
-    debug { signingConfig = signingConfigs.getByName("debugConfig") }
+    debug {
+      // Keep local installs updateable; clean checkouts use Android's generated debug key.
+      signingConfig = signingConfigs.getByName(
+        if (rootProject.file("debug.keystore").isFile) "debugConfig" else "debug"
+      )
+    }
   }
   compileOptions {
     sourceCompatibility = JavaVersion.VERSION_11

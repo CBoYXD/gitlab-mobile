@@ -1,0 +1,124 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+  # For retries: select the existing release tag, not a branch.
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  version:
+    name: Validate release tag
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Require a version tag matching the app
+        id: version
+        run: python3 .github/scripts/check-release-version.py
+
+  ci:
+    needs: version
+    uses: ./.github/workflows/ci.yml
+
+  build:
+    name: Build signed APK and app bundle
+    needs: [version, ci]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    env:
+      VERSION: ${{ needs.version.outputs.version }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - name: Restore release signing key
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/gitlab-mobile-release.jks
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          set -euo pipefail
+          for name in ANDROID_KEYSTORE_BASE64 STORE_PASSWORD KEY_PASSWORD; do
+            if [[ -z "${!name}" ]]; then
+              echo "::error::Missing release signing secret: ${name}. See docs/releases.md."
+              exit 1
+            fi
+          done
+          umask 077
+          printf '%s' "$ANDROID_KEYSTORE_BASE64" | base64 --decode > "$KEYSTORE_PATH"
+      - uses: ./.github/actions/setup-android
+        with:
+          cache-read-only: 'true'
+      - name: Build signed release artifacts
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/gitlab-mobile-release.jks
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+        # Keep signing credentials out of Gradle's configuration cache.
+        run: >-
+          ./gradlew :app:assembleRelease :app:bundleRelease
+          --no-configuration-cache --stacktrace --console=plain
+      - name: Verify signatures and prepare downloads
+        run: |
+          set -euo pipefail
+          "$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --verbose app/build/outputs/apk/release/app-release.apk
+          jarsigner -verify app/build/outputs/bundle/release/app-release.aab
+          mkdir -p dist
+          cp app/build/outputs/apk/release/app-release.apk "dist/gitlab-mobile-${VERSION}.apk"
+          cp app/build/outputs/bundle/release/app-release.aab "dist/gitlab-mobile-${VERSION}.aab"
+          cd dist
+          sha256sum -- *.apk *.aab > SHA256SUMS
+      - name: Save release artifacts
+        uses: actions/upload-artifact@v7
+        with:
+          name: release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist/
+          if-no-files-found: error
+          retention-days: 14
+      - name: Remove signing key
+        if: always()
+        env:
+          KEYSTORE_PATH: ${{ runner.temp }}/gitlab-mobile-release.jks
+        run: rm -f -- "$KEYSTORE_PATH"
+
+  publish:
+    name: Publish GitHub Release
+    needs: [version, build]
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          name: release-${{ github.run_id }}-${{ github.run_attempt }}
+          path: dist
+      - name: Publish APK, app bundle and checksums
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          cd dist
+          sha256sum --check SHA256SUMS
+          # Never overwrite an existing release's binaries on a rerun.
+          args=(--verify-tag --generate-notes --title "GitLab Mobile ${TAG}")
+          if [[ "$TAG" == *-* ]]; then
+            args+=(--prerelease --latest=false)
+          fi
+          gh release create "$TAG" ./*.apk ./*.aab SHA256SUMS "${args[@]}"

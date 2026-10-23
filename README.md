@@ -1,5 +1,8 @@
 # GitLab Mobile
 
+[![CI](https://github.com/CBoYXD/gitlab-mobile/actions/workflows/ci.yml/badge.svg)](https://github.com/CBoYXD/gitlab-mobile/actions/workflows/ci.yml)
+[Download the latest release](https://github.com/CBoYXD/gitlab-mobile/releases/latest)
+
 A native Android client for GitLab.com and self-hosted GitLab servers, built with Jetpack Compose. It is laid out like GitHub Mobile and colored like GitLab: read code with syntax highlighting, review merge requests and diffs, follow pipelines down to the job log, and write Markdown with a real editor. Without an account it opens as a guest on GitLab.com's public projects.
 
 <p>
@@ -90,16 +93,25 @@ Project and group avatars use authenticated API download endpoints. On servers t
 
 ## Building
 
-Requirements: JDK 17+, Android SDK 36.
+Requirements: JDK 25 (used in CI), Android SDK 36.1 and build-tools 36.0.0. The checked-in Gradle wrapper installs Gradle 9.3.1.
 
 ```bash
 ./gradlew :app:assembleDebug          # build
 ./gradlew :app:testDebugUnitTest      # unit and UI tests (MockWebServer, Robolectric)
+./gradlew :app:lintDebug              # Android lint
 ./gradlew :app:recordRoborazziDebug   # re-record the screenshot tests
 ./gradlew :app:installDebug           # install on a connected device or emulator
 ```
 
 The tests cover the API layer (pagination limits, cancellation, JSON null handling, project counts, token parsing, error messages), guest mode and saved accounts, file-icon lookup (and that every shipped icon renders), Markdown parsing and the editor, and the main screens in Compose: Home, accounts, project page, code browser and file viewer with line selection, issue and merge request lists and pages. Screenshot tests record Home and the project page in both themes.
+
+## CI and releases
+
+GitHub Actions runs tests, Android Lint and debug builds for pull requests into `main` and pushes to `main` that change the app, Gradle build files or CI configuration. Documentation-only changes skip CI entirely. Download the debug APK and test/lint reports from the run's **Artifacts**. A clean checkout generates a debug signing key automatically; a local `debug.keystore`, when present, is still used for existing local installs.
+
+Pushing a version tag such as `v1.5.0` runs the same checks, builds signed APK/AAB files and publishes a GitHub Release with generated release notes and SHA-256 checksums. The tag must match `versionName` in `app/build.gradle.kts`; increase `versionCode` for each release. Tags such as `v1.5.0-rc.1` publish prereleases.
+
+See [the release guide](docs/releases.md) for signing secrets, release commands and retries.
 
 ## Credits
 

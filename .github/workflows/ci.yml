@@ -1,0 +1,74 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/scripts/**'
+  push:
+    branches: [main]
+    paths:
+      - 'app/**'
+      - 'gradle/**'
+      - '*.gradle'
+      - '*.gradle.kts'
+      - 'gradle.properties'
+      - 'gradlew'
+      - 'gradlew.bat'
+      - '.github/workflows/**'
+      - '.github/actions/**'
+      - '.github/scripts/**'
+  workflow_dispatch:
+  workflow_call:
+
+permissions:
+  contents: read
+
+concurrency:
+  # A release calls this workflow too; its checks must not cancel a branch's CI.
+  group: ci-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' || github.ref == 'refs/heads/main' }}
+
+jobs:
+  android:
+    name: Android (tests, lint, APK)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: ./.github/actions/setup-android
+      - name: Run unit and Compose tests, lint, and build debug APKs
+        # Most UI tests run on Robolectric; compile the device smoke test as well.
+        run: >-
+          ./gradlew :app:testDebugUnitTest :app:lintDebug
+          :app:assembleDebug :app:assembleDebugAndroidTest
+          --continue --stacktrace --console=plain
+      - name: Save test and lint reports, including failures
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: android-reports-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            app/build/reports/
+            app/build/test-results/
+            app/build/outputs/roborazzi/
+          if-no-files-found: ignore
+          retention-days: 14
+      - name: Save installable debug APK
+        uses: actions/upload-artifact@v7
+        with:
+          name: gitlab-mobile-debug-${{ github.sha }}-${{ github.run_attempt }}
+          path: app/build/outputs/apk/debug/*.apk
+          if-no-files-found: error
+          retention-days: 14

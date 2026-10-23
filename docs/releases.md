@@ -6,6 +6,12 @@ The `CI` workflow runs on pull requests into `main` and pushes to `main` when ch
 
 Manual dispatch and the CI called by `Release` always run the full checks, independently of path filters. `Release` only starts on version-tag pushes or manual dispatch, so documentation-only branch pushes never start a release. Creating a version tag is an explicit release request and always runs checks and builds, even if the tagged commit only changed documentation. CI requires no signing secrets, including for fork pull requests.
 
+To explicitly run all checks after a documentation-only change, use **Actions → CI → Run workflow** or:
+
+```bash
+gh workflow run ci.yml --ref main
+```
+
 CI uses Ubuntu 24.04, Temurin JDK 25, Android SDK 36.1, build-tools 36.0.0 and the checked-in Gradle wrapper. Gradle dependencies are cached; only `main` writes the shared cache. Older PR/branch CI runs are cancelled when a new run starts.
 
 The checks are:
